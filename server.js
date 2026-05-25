@@ -582,7 +582,7 @@ app.post('/api/action/stream', (req, res) => {
   res.json({ success: true, key });
 });
 
-// Launch url using desktop Zen Browser flatpak or fallback to xdg-open
+// Launch url using desktop Zen Browser flatpak only (no fallback)
 app.post('/api/action/url', (req, res) => {
   const { url } = req.body;
   if (!url) {
@@ -595,16 +595,7 @@ app.post('/api/action/url', (req, res) => {
   exec(zenCmd, (error) => {
     if (error) {
       console.warn(`[API] Failed to open URL via Zen Browser:`, error.message);
-      console.log(`[API] Falling back to default system launcher (xdg-open)...`);
-      
-      const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-      exec(`${openCmd} "${url}"`, (fallbackError) => {
-        if (fallbackError) {
-          console.error(`[API] Failed to open URL via fallback:`, fallbackError);
-          return res.json({ success: true, hostOpenFailed: true });
-        }
-        res.json({ success: true });
-      });
+      return res.json({ success: false, hostOpenFailed: true, error: error.message });
     } else {
       res.json({ success: true });
     }
