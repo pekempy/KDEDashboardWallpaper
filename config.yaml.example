@@ -1,0 +1,31 @@
+server:
+  port: 4848
+  host: 0.0.0.0
+ui:
+  title: My Dashboard
+  theme: dark
+  accent_color: '#d4af37'
+  refresh_interval_ms: 5000
+categories:
+  - id: scripts
+    name: Scripts
+    icon: 🐚
+    description: Automation tools
+  - id: web
+    name: Web Apps
+    icon: 🌐
+    description: Web applications
+quick_links:
+  - name: Documents
+    path: /home/user/Documents
+    icon: 📂
+  - name: Downloads
+    path: /home/user/Downloads
+    icon: 📥
+bookmarks:
+  - name: GitHub
+    url: https://github.com
+    icon: 🐙
+  - name: Plex
+    url: https://app.plex.tv
+    icon: 🎬

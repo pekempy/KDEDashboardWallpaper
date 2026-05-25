@@ -1,0 +1,11 @@
+# User config files (contain personal paths, bookmarks, etc.)
+config.yaml
+projects.yaml
+docker.yaml
+
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db

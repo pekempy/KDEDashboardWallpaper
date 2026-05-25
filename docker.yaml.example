@@ -1,0 +1,25 @@
+# Docker containers are auto-populated from `docker ps`,
+# but you can pre-define entries here with custom icons/actions.
+- id: my-container
+  name: My Container
+  path: /opt/my-container
+  category: web
+  description: A sample Docker container.
+  icon: 🐳
+  actions: []
+  status:
+    git: false
+    docker: my-container
+    port: 8080
+  hidden: false
+- id: database
+  name: Database
+  path: ''
+  category: web
+  description: PostgreSQL database.
+  icon: 🐘
+  actions: []
+  status:
+    git: false
+    docker: postgres-db
+  hidden: true

@@ -1,0 +1,27 @@
+- id: my-project
+  name: My Project
+  path: /home/user/projects/my-project
+  category: web
+  description: A sample web project.
+  icon: 🚀
+  actions:
+    - name: Open Editor
+      type: command
+      cmd: code .
+    - name: Open Folder
+      type: command
+      cmd: dolphin .
+  status:
+    git: true
+- id: script-tool
+  name: Script Tool
+  path: /home/user/scripts/tool
+  category: scripts
+  description: A helper script.
+  icon: 🐚
+  actions:
+    - name: Open Editor
+      type: command
+      cmd: code .
+  status:
+    git: true
