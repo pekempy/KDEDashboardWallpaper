@@ -590,9 +590,10 @@ function renderProjects() {
     
     proj.actions.forEach((action, index) => {
       if (action.type === 'command') {
+        const iconName = (action.name.toLowerCase() === 'files' || action.name.toLowerCase() === 'dolphin') ? 'folder' : 'play-circle';
         actionsHTML += `
           <button class="btn btn-secondary action-btn" onclick="runCommandAction('${proj.id}', ${index})">
-            <i data-lucide="play-circle"></i>
+            <i data-lucide="${iconName}"></i>
             <span>${action.name}</span>
           </button>
         `;
