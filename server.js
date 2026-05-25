@@ -11,6 +11,9 @@ import si from 'systeminformation';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Ensure TERM environment variable is set for spawned subprocesses
+process.env.TERM = process.env.TERM || 'xterm-256color';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
