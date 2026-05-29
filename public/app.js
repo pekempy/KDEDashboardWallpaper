@@ -1197,10 +1197,12 @@ function updateSystemMonitor(stats) {
         <div class="disk-entry">
           <div class="stat-label">
             <span class="disk-mount-name">${label}</span>
-            <span>${Math.round(d.use)}%</span>
           </div>
-          <div class="progress-bar-container">
-            <div class="progress-bar progress-disk" style="width: ${d.use}%"></div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar-container">
+              <div class="progress-bar progress-disk" style="width: ${d.use}%"></div>
+            </div>
+            <span class="progress-percent">${Math.round(d.use)}%</span>
           </div>
           <div class="stat-subtext">${displayUsed} / ${displayTotal}</div>
         </div>
@@ -1615,6 +1617,8 @@ window.hideProjectCard = hideProjectCard;
 window.toggleEditMode = toggleEditMode;
 window.triggerHostOpenUrl = triggerHostOpenUrl;
 window.toggleCompactMode = toggleCompactMode;
+window.launchKonsole = launchKonsole;
+window.launchUpdate = launchUpdate;
 
 // Layout Drag & Drop system
 let dragSrcEl = null;
@@ -2144,6 +2148,46 @@ async function triggerHostOpenUrl(url) {
     }
   } catch (err) {
     window.open(url, '_blank');
+  }
+}
+
+async function launchKonsole() {
+  showToast('Launching Konsole...');
+  try {
+    const res = await fetch('/api/action/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cmd: 'konsole',
+        path: '/home/glados'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      showToast(`Failed to launch: ${data.error}`);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`);
+  }
+}
+
+async function launchUpdate() {
+  showToast('Launching system update in terminal...');
+  try {
+    const res = await fetch('/api/action/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cmd: 'konsole -e zsh -i -c "update; exec zsh"',
+        path: '/home/glados'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      showToast(`Failed to launch: ${data.error}`);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`);
   }
 }
 

@@ -80,24 +80,39 @@
             <i data-lucide="cpu"></i>
             <span>System Resources</span>
           </h3>
+
+          <div class="system-monitor-actions">
+            <button class="btn btn-secondary btn-sm" onclick="launchKonsole()">
+              <i data-lucide="terminal"></i>
+              <span>Konsole</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="launchUpdate()">
+              <i data-lucide="refresh-cw"></i>
+              <span>Update</span>
+            </button>
+          </div>
           
           <div class="stat-group">
             <div class="stat-label">
               <span>CPU Load</span>
-              <span id="cpu-percent">0%</span>
             </div>
-            <div class="progress-bar-container">
-              <div id="cpu-progress" class="progress-bar progress-cpu" style="width: 0%"></div>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar-container">
+                <div id="cpu-progress" class="progress-bar progress-cpu" style="width: 0%"></div>
+              </div>
+              <span id="cpu-percent" class="progress-percent">0%</span>
             </div>
-            </div>
+          </div>
 
           <div class="stat-group">
             <div class="stat-label">
               <span>Memory Usage</span>
-              <span id="mem-percent">0%</span>
             </div>
-            <div class="progress-bar-container">
-              <div id="mem-progress" class="progress-bar progress-mem" style="width: 0%"></div>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar-container">
+                <div id="mem-progress" class="progress-bar progress-mem" style="width: 0%"></div>
+              </div>
+              <span id="mem-percent" class="progress-percent">0%</span>
             </div>
             <div class="stat-subtext" id="mem-text">0 GB / 0 GB</div>
           </div>
