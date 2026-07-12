@@ -641,61 +641,93 @@ app.get('/api/service/logs', (req, res) => {
   res.json({ logs: svc.logs });
 });
 
-// Get Project Details and status (git, ports, services)
-app.get('/api/projects/status', async (req, res) => {
-  const statusList = [];
-  const allProjects = [...projectsList, ...dockerList];
-  
-  for (const project of allProjects) {
-    const projStatus = {
-      id: project.id,
-      git: null,
-      ports: {},
-      services: {},
-      docker: null
-    };
+// Background Polling for Status
+let cachedProjectStatus = [];
+let isCheckingProjects = false;
+
+async function pollProjectStatuses() {
+  if (isCheckingProjects) return;
+  isCheckingProjects = true;
+  try {
+    const statusList = [];
+    const allProjects = [...projectsList, ...dockerList];
     
-    // Check Git status
-    if (project.status && project.status.git) {
-      projStatus.git = await getGitStatus(project.path);
-    }
-    
-    // Check Docker status
-    if (project.status && project.status.docker) {
-      projStatus.docker = await checkDockerStatus(project.status.docker);
-    }
-    
-    // Check Port status
-    if (project.status && project.status.port) {
-      const port = project.status.port;
-      const isOpen = await checkPortStatus(port);
-      projStatus.ports[port] = isOpen;
-    }
-    
-    // Check ports for service actions
-    for (const action of project.actions) {
-      if (action.type === 'service' && action.port) {
-        const isOpen = await checkPortStatus(action.port);
-        projStatus.ports[action.port] = isOpen;
+    // Check all docker containers in one go
+    let dockerStateMap = {};
+    try {
+      const { stdout } = await new Promise((resolve) => {
+        exec('docker ps -a --format "{{.Names}}\\t{{.State}}"', (err, stdout) => resolve({stdout}));
+      });
+      if (stdout) {
+        stdout.trim().split('\n').forEach(line => {
+          const [name, state] = line.split('\t');
+          if (name && state) {
+            dockerStateMap[name] = { running: state === 'running', status: state };
+          }
+        });
+      }
+    } catch (e) {}
+
+    for (const project of allProjects) {
+      const projStatus = {
+        id: project.id,
+        git: null,
+        ports: {},
+        services: {},
+        docker: null
+      };
+      
+      if (project.status && project.status.git) {
+        projStatus.git = await getGitStatus(project.path);
       }
       
-      if (action.type === 'service') {
-        const key = getServiceKey(project.id, action.name);
-        const svc = services.get(key);
-        projStatus.services[action.name] = svc ? {
-          status: svc.status,
-          startTime: svc.startTime,
-          exitCode: svc.exitCode
-        } : {
-          status: 'stopped'
-        };
+      if (project.status && project.status.docker) {
+        const dName = project.status.docker;
+        if (dockerStateMap[dName]) {
+           projStatus.docker = dockerStateMap[dName];
+        } else {
+           projStatus.docker = { running: false, status: 'stopped/not found' };
+        }
       }
+      
+      if (project.status && project.status.port) {
+        projStatus.ports[project.status.port] = await checkPortStatus(project.status.port);
+      }
+      
+      for (const action of (project.actions || [])) {
+        if (action.type === 'service' && action.port) {
+          projStatus.ports[action.port] = await checkPortStatus(action.port);
+        }
+        
+        if (action.type === 'service') {
+          const key = getServiceKey(project.id, action.name);
+          const svc = services.get(key);
+          projStatus.services[action.name] = svc ? {
+            status: svc.status,
+            startTime: svc.startTime,
+            exitCode: svc.exitCode
+          } : { status: 'stopped' };
+        }
+      }
+      
+      statusList.push(projStatus);
     }
     
-    statusList.push(projStatus);
+    cachedProjectStatus = statusList;
+  } catch (err) {
+    console.error('Error polling project statuses:', err);
+  } finally {
+    isCheckingProjects = false;
   }
-  
-  res.json(statusList);
+}
+
+// Start polling
+setInterval(pollProjectStatuses, 15000);
+pollProjectStatuses();
+
+// Get Project Details and status (git, ports, services)
+app.get('/api/projects/status', (req, res) => {
+  res.json(cachedProjectStatus);
 });
 
 // Update UI elements (icons, labels, titles, descriptions)
@@ -936,12 +968,22 @@ app.get('/api/docker/logs/:container', (req, res) => {
 });
 
 // System Monitor Info
+let cachedDisk = null;
+let cachedOsInfo = null;
+let lastHeavyStatsTime = 0;
+
 app.get('/api/system/stats', async (req, res) => {
   try {
     const cpuLoad = await si.currentLoad();
     const memory = await si.mem();
-    const disk = await si.fsSize();
-    const osInfo = await si.osInfo();
+    
+    // Only fetch heavy disk/os info every 60 seconds
+    const now = Date.now();
+    if (now - lastHeavyStatsTime > 60000 || !cachedDisk) {
+      cachedDisk = await si.fsSize();
+      cachedOsInfo = await si.osInfo();
+      lastHeavyStatsTime = now;
+    }
     
     res.json({
       cpu: {
@@ -953,17 +995,17 @@ app.get('/api/system/stats', async (req, res) => {
         active: memory.active,
         usedPercent: (memory.active / memory.total) * 100
       },
-      disk: disk.map(d => ({
+      disk: cachedDisk.filter(d => d.mount === '/' || d.mount.startsWith('/srv/') || d.mount.startsWith('/mnt/')).map(d => ({
         fs: d.fs,
         size: d.size,
         use: d.use,
         mount: d.mount
       })),
       os: {
-        platform: osInfo.platform,
-        distro: osInfo.distro,
-        release: osInfo.release,
-        hostname: osInfo.hostname,
+        platform: cachedOsInfo.platform,
+        distro: cachedOsInfo.distro,
+        release: cachedOsInfo.release,
+        hostname: cachedOsInfo.hostname,
         uptime: si.time().uptime
       }
     });

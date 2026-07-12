@@ -4,283 +4,175 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GLaDOS Dashboard</title>
-  <!-- Google Fonts -->
+  
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Lucide Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Main Stylesheet -->
+  
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
-  <div class="background-image-container" id="bg-image-container"></div>
-  <div class="background-glow"></div>
-  
+  <!-- Dynamic Background -->
+  <div id="bg-layer" class="bg-layer"></div>
+  <div class="bg-overlay"></div>
+
   <div class="app-container">
-    <!-- Header -->
-    <header class="app-header">
+    
+    <!-- Top Navigation / Header -->
+    <header class="glass-header">
       <div class="header-left">
-        <div class="logo-area">
-          <i data-lucide="layout-dashboard" class="logo-icon"></i>
-          <h1 id="dashboard-title">GLaDOS Dashboard</h1>
+        <div class="logo">
+          <i data-lucide="cpu" class="text-accent"></i>
+          <span class="logo-text">GLaDOS</span>
         </div>
-        <span class="status-indicator-pill">
-          <span class="pulse-dot"></span>
-          <span class="status-text">Server Online</span>
-        </span>
-        <!-- Search Bar -->
-        <div class="search-bar-container header-search">
-          <i data-lucide="search" class="search-icon"></i>
-          <input type="text" id="project-search" placeholder="Search folders, bookmarks, projects, docker..." class="search-input" autocomplete="off">
-          <div id="search-results-dropdown" class="search-dropdown" style="display: none;"></div>
+        <div class="status-badge" id="server-status">
+          <span class="dot pulse"></span> Online
         </div>
       </div>
+      
+      <div class="header-center">
+        <div class="clock-display" id="clock-display">00:00</div>
+        <div class="date-display" id="date-display">Monday, January 1</div>
+      </div>
+
       <div class="header-right">
-        <button id="btn-random-bg" class="btn btn-secondary">
-          <i data-lucide="image"></i>
-          <span>New Wallpaper</span>
-        </button>
-        
-        <!-- Manage/Edit Dropdown Menu -->
-        <div class="edit-dropdown-container">
-          <button id="btn-edit-dropdown-toggle" class="btn btn-secondary">
-            <i data-lucide="settings"></i>
-            <span id="edit-dropdown-text">Edit Dashboard</span>
-            <i data-lucide="chevron-down" style="width: 14px; height: 14px; margin-left: 4px;"></i>
-          </button>
-          <div id="edit-dropdown-menu" class="edit-dropdown-menu" style="display: none;">
-            <button class="edit-dropdown-item" id="item-edit-layout" onclick="handleMenuEditLayout()">
-              <i data-lucide="move"></i>
-              <span>Edit Layout</span>
-            </button>
-            <button class="edit-dropdown-item" id="item-edit-ui" onclick="toggleEditUiMode()">
-              <i data-lucide="edit-3"></i>
-              <span>Edit UI Elements</span>
-            </button>
-            <button class="edit-dropdown-item" id="item-edit-config" onclick="handleMenuEditConfig()">
-              <i data-lucide="file-text"></i>
-              <span>Edit raw config.yaml</span>
-            </button>
-          </div>
+        <div class="search-box">
+          <i data-lucide="search"></i>
+          <input type="text" id="global-search" placeholder="Search system..." autocomplete="off">
         </div>
-        
-        <span id="uptime-display" class="uptime-text">Uptime: 00:00:00</span>
+        <button class="icon-btn" id="btn-wallpaper" title="New Wallpaper">
+          <i data-lucide="image"></i>
+        </button>
+        <button class="icon-btn" id="btn-edit-mode" title="Toggle Edit Mode">
+          <i data-lucide="settings"></i>
+        </button>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="dashboard-main">
+    <!-- Main Content Layout -->
+    <main class="dashboard-layout">
       
-      <!-- Sidebar / Quick links & System Monitor -->
-      <section class="dashboard-sidebar">
-        <!-- System Monitor Widget -->
-        <div class="widget-card system-monitor" id="widget-system-monitor">
-          <h3 class="widget-title">
-            <i data-lucide="cpu"></i>
-            <span>System Resources</span>
-          </h3>
+      <!-- Left Sidebar (Widgets) -->
+      <aside class="sidebar">
+        
+        <!-- System Vitals -->
+        <div class="glass-card widget widget-vitals">
+          <div class="widget-header">
+            <h3><i data-lucide="activity"></i> System Vitals</h3>
+            <span class="uptime" id="uptime-display">00:00:00 up</span>
+          </div>
+          <div class="vitals-grid">
+            <div class="vital-item">
+              <div class="vital-label">CPU</div>
+              <div class="progress-track"><div class="progress-fill" id="cpu-bar"></div></div>
+              <div class="vital-val" id="cpu-val">0%</div>
+            </div>
+            <div class="vital-item">
+              <div class="vital-label">RAM</div>
+              <div class="progress-track"><div class="progress-fill" id="ram-bar"></div></div>
+              <div class="vital-val" id="ram-val">0%</div>
+            </div>
+          </div>
+          <div class="disk-vitals" id="disk-vitals">
+            <!-- Dynamic Disks -->
+          </div>
+          <div class="widget-actions">
+            <button class="btn btn-sm btn-ghost" onclick="app.launchKonsole()"><i data-lucide="terminal"></i> Terminal</button>
+            <button class="btn btn-sm btn-ghost" onclick="app.launchUpdate()"><i data-lucide="refresh-cw"></i> Update</button>
+          </div>
+        </div>
 
-          <div class="system-monitor-actions">
-            <button class="btn btn-secondary btn-sm" onclick="launchKonsole()">
-              <i data-lucide="terminal"></i>
-              <span>Konsole</span>
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="launchUpdate()">
-              <i data-lucide="refresh-cw"></i>
-              <span>Update</span>
-            </button>
+        <!-- Bookmarks -->
+        <div class="glass-card widget widget-links">
+          <div class="widget-header">
+            <h3><i data-lucide="bookmark"></i> Bookmarks</h3>
+            <button class="icon-btn-sm edit-only" onclick="app.addBookmark()"><i data-lucide="plus"></i></button>
+          </div>
+          <div class="links-grid" id="bookmarks-grid">
+            <!-- Dynamic Bookmarks -->
+          </div>
+        </div>
+
+        <!-- Folder Shortcuts -->
+        <div class="glass-card widget widget-links">
+          <div class="widget-header">
+            <h3><i data-lucide="folder"></i> Folders</h3>
+            <button class="icon-btn-sm edit-only" onclick="app.addFolder()"><i data-lucide="plus"></i></button>
+          </div>
+          <div class="links-grid" id="folders-grid">
+            <!-- Dynamic Folders -->
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Hub (Projects & Docker) -->
+      <section class="main-hub">
+        <div class="glass-card hub-container">
+          <div class="hub-header">
+            <div class="tabs" id="main-tabs">
+              <button class="tab active" data-tab="projects"><i data-lucide="code"></i> Projects</button>
+              <button class="tab" data-tab="docker"><i data-lucide="box"></i> Containers</button>
+            </div>
+            <div class="filters" id="category-filters">
+              <!-- Dynamic Categories -->
+            </div>
           </div>
           
-          <div class="stat-group">
-            <div class="stat-label">
-              <span>CPU Load</span>
-            </div>
-            <div class="progress-bar-wrapper">
-              <div class="progress-bar-container">
-                <div id="cpu-progress" class="progress-bar progress-cpu" style="width: 0%"></div>
-              </div>
-              <span id="cpu-percent" class="progress-percent">0%</span>
-            </div>
+          <div class="hub-grid" id="projects-grid">
+            <!-- Dynamic Project Cards -->
           </div>
-
-          <div class="stat-group">
-            <div class="stat-label">
-              <span>Memory Usage</span>
-            </div>
-            <div class="progress-bar-wrapper">
-              <div class="progress-bar-container">
-                <div id="mem-progress" class="progress-bar progress-mem" style="width: 0%"></div>
-              </div>
-              <span id="mem-percent" class="progress-percent">0%</span>
-            </div>
-            <div class="stat-subtext" id="mem-text">0 GB / 0 GB</div>
-          </div>
-
-          <div class="stat-group">
-            <div class="stat-label">
-              <span>Disk Storage</span>
-            </div>
-            <div class="disk-entries" id="disk-entries">
-              <!-- Dynamically populated disk mounts -->
-            </div>
-          </div>
-          
-          <div class="system-meta-info" id="system-meta">
-            <div class="meta-item"><i data-lucide="hard-drive"></i> <span id="os-distro">Linux</span></div>
-            <div class="meta-item"><i data-lucide="terminal"></i> <span id="os-hostname">glados-pc</span></div>
-          </div>
-        </div>
-
-        <!-- Folder Shortcuts Widget -->
-        <div class="widget-card quick-links-card" id="widget-quick-links">
-          <h3 class="widget-title">
-            <i data-lucide="folder"></i>
-            <span>Folder Shortcuts</span>
-          </h3>
-          <div class="quick-links-grid" id="quick-links-container">
-            <!-- Dynamically populated folder shortcuts -->
-          </div>
-        </div>
-
-        <!-- Bookmarks Widget -->
-        <div class="widget-card bookmarks-card" id="widget-bookmarks">
-          <h3 class="widget-title">
-            <i data-lucide="bookmark"></i>
-            <span>Bookmarks</span>
-          </h3>
-          <div class="quick-links-grid" id="bookmarks-container">
-            <!-- Dynamically populated bookmarks -->
-          </div>
-        </div>
-      </section>
-
-      <!-- Projects Grid Section -->
-      <section class="dashboard-projects">
-        <!-- Main Project/Docker Tabs -->
-        <div class="tabs-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-          <div class="project-tabs-container" style="margin-bottom: 0;">
-            <button class="main-tab-btn active" id="tab-projects" onclick="switchTab('projects')">
-              <i data-lucide="folder"></i>
-              <span>Projects</span>
-            </button>
-            <button class="main-tab-btn" id="tab-docker" onclick="switchTab('docker')">
-              <i data-lucide="box"></i>
-              <span>Docker Containers</span>
-            </button>
-          </div>
-          
-          <button class="btn btn-secondary compact-toggle-btn" id="btn-toggle-compact" onclick="toggleCompactMode()" style="gap: 6px; padding: 8px 16px; font-size: 13px; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); display: flex; align-items: center; cursor: pointer; transition: var(--transition-smooth);">
-            <i data-lucide="minimize-2" style="width: 15px; height: 15px;"></i>
-            <span>Compact View</span>
-          </button>
-        </div>
-
-        <!-- Categories Tabs -->
-        <div class="categories-tabs" id="categories-tabs-container">
-          <button class="tab-btn active" data-category="all">
-            <i data-lucide="grid"></i>
-            <span>All Projects</span>
-          </button>
-          <!-- Dynamically populated categories -->
-        </div>
-
-
-
-        <!-- Projects Grid -->
-        <div class="projects-grid" id="projects-grid-container">
-          <!-- Dynamically populated projects -->
         </div>
       </section>
     </main>
+    
+    <!-- Logs Drawer -->
+    <div class="logs-drawer" id="logs-drawer">
+      <div class="logs-header">
+        <div class="logs-title">
+          <i data-lucide="terminal"></i> <span id="logs-title-text">Service Logs</span>
+        </div>
+        <div class="logs-actions">
+          <button class="icon-btn-sm" id="btn-clear-logs"><i data-lucide="trash-2"></i></button>
+          <button class="icon-btn-sm" onclick="document.getElementById('logs-drawer').classList.remove('open')"><i data-lucide="x"></i></button>
+        </div>
+      </div>
+      <div class="logs-body" id="logs-output"></div>
+    </div>
 
-    <!-- Terminal Logs Drawer (Overlay) -->
-    <div class="terminal-drawer-overlay" id="logs-drawer-overlay"></div>
-    <section class="terminal-drawer" id="logs-drawer">
-      <div class="drawer-header">
-        <div class="drawer-title-area">
-          <i data-lucide="terminal" class="drawer-icon"></i>
-          <div>
-            <h2 id="drawer-title">Service Logs</h2>
-            <p id="drawer-subtitle" class="drawer-subtitle">Project Name</p>
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="edit-modal">
+      <div class="glass-card modal">
+        <div class="modal-header">
+          <h3 id="modal-title">Edit Item</h3>
+          <button class="icon-btn-sm" onclick="app.closeModal()"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="edit-name" class="input-modern">
+          </div>
+          <div class="form-group">
+            <label>Path / URL</label>
+            <input type="text" id="edit-path" class="input-modern">
+          </div>
+          <div class="form-group">
+            <label>Icon (Lucide name or URL)</label>
+            <input type="text" id="edit-icon" class="input-modern">
           </div>
         </div>
-        <div class="drawer-actions">
-          <button id="btn-clear-logs" class="btn btn-secondary btn-sm">
-            <i data-lucide="trash-2"></i>
-            <span>Clear</span>
-          </button>
-          <button id="btn-copy-logs" class="btn btn-secondary btn-sm">
-            <i data-lucide="copy"></i>
-            <span>Copy</span>
-          </button>
-          <button id="btn-close-drawer" class="btn btn-icon-only btn-close">
-            <i data-lucide="x"></i>
-          </button>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-edit">Save Changes</button>
         </div>
-      </div>
-      <div class="drawer-body">
-        <div class="terminal-log-window" id="service-log-window">
-          <!-- Live process output lines -->
-        </div>
-      </div>
-      <div class="drawer-footer">
-        <span class="connection-status">
-          <span class="pulse-dot"></span>
-          <span>Live Streaming Logs via SSE</span>
-        </span>
-      </div>
-    </section>
-  </div>
-
-  <!-- Edit Panel (Edit UI Mode) -->
-  <div id="edit-panel" class="edit-panel" style="display:none;">
-    <div class="edit-panel-header">
-      <div class="edit-panel-title-row">
-        <i data-lucide="edit-3" style="width:16px;height:16px;"></i>
-        <span id="edit-panel-label">Edit Element</span>
-      </div>
-      <button class="edit-panel-close" id="edit-panel-close">&times;</button>
-    </div>
-    <div class="edit-panel-body">
-      <div class="ep-group" id="ep-group-name">
-        <label class="ep-label">Name / Label</label>
-        <input class="ep-input" id="ep-name" type="text" autocomplete="off">
-      </div>
-      <div class="ep-group" id="ep-group-desc">
-        <label class="ep-label">Description</label>
-        <textarea class="ep-input ep-textarea" id="ep-desc" rows="2"></textarea>
-      </div>
-      <div class="ep-group" id="ep-group-url">
-        <label class="ep-label">URL</label>
-        <input class="ep-input" id="ep-url" type="text" placeholder="https://...">
-      </div>
-      <div class="ep-group" id="ep-group-path">
-        <label class="ep-label">Folder Path</label>
-        <input class="ep-input" id="ep-path" type="text" placeholder="/home/...">
-      </div>
-      <div class="ep-group" id="ep-group-icon">
-        <label class="ep-label">Icon</label>
-        <div class="ep-icon-row">
-          <div class="ep-icon-preview" id="ep-icon-preview"></div>
-          <input class="ep-input ep-icon-input" id="ep-icon-val" type="text" placeholder="icon-name, emoji, or image URL">
-        </div>
-        <div class="ep-icon-search-row">
-          <input class="ep-input ep-icon-search" id="ep-icon-search" type="text" placeholder="Search icons...">
-        </div>
-        <div class="ep-icon-grid" id="ep-icon-grid"></div>
       </div>
     </div>
-    <div class="edit-panel-footer">
-      <button class="btn btn-secondary btn-sm" id="ep-cancel">Cancel</button>
-      <button class="btn btn-primary btn-sm" id="ep-save">Save Changes</button>
-    </div>
-  </div>
-
-  <!-- Notification Toast -->
-  <div class="notification-toast" id="notification-toast">
-    <i data-lucide="info" class="toast-icon"></i>
-    <span class="toast-message">Configuration reloaded!</span>
+    
+    <!-- Toast -->
+    <div class="toast" id="toast">Message</div>
   </div>
 
   <script src="app.js"></script>
