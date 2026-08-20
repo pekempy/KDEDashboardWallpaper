@@ -1,0 +1,46 @@
+server:
+  port: 4848
+  host: 0.0.0.0
+system:
+  # Default working directory for Terminal/Update/folder-open commands.
+  home_dir: /home/user
+background:
+  # Random wallpaper rotation pulls from an rclone remote. Leave rclone_remote
+  # blank to disable background rotation entirely.
+  rclone_remote: ''
+  rclone_path: ''
+# Optional service widgets. Omit or leave a block out entirely to disable it -
+# each one is only queried if present.
+integrations:
+  nzbget:
+    url: http://localhost:6789/jsonrpc
+    username: nzbget
+    password: ''
+  qui:
+    url: http://localhost:4344
+    api_key: ''
+    instance_id: 1
+  jellyfin:
+    url: http://localhost:8096
+    public_url: ''
+    token: ''
+  immich:
+    url: http://localhost:2283
+    public_url: ''
+    api_key: ''
+ui:
+  title: My Dashboard
+  theme: dark
+  accent_color: '#d4af37'
+  refresh_interval_ms: 5000
+quick_links:
+  - name: Documents
+    path: /home/user/Documents
+    icon: 📂
+  - name: Downloads
+    path: /home/user/Downloads
+    icon: 📥
+bookmarks:
+  - name: GitHub
+    url: https://github.com
+    icon: 🐙

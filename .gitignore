@@ -1,0 +1,15 @@
+# User config file (contains personal paths, bookmarks, etc.)
+config.yaml
+
+# Auto-discovered/unused container listing (personal infra, not read by server.js)
+docker.yaml
+
+# Runtime-generated wallpaper, overwritten by the rclone background rotation
+public/background.jpg
+
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db

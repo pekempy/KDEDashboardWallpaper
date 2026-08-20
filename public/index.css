@@ -1,0 +1,440 @@
+@font-face {
+  font-family: 'Monolithic';
+  src: url('assets/fonts/Monolithic.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --font-main: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  /* Playfair Display, not Cinzel - Cinzel reads as Roman carved-stone; the
+     game's actual title/menu typography is a refined French-literary serif,
+     and Playfair holds up at small uppercase sizes where Cormorant's
+     delicate strokes wash out */
+  --font-display: 'Playfair Display', serif;
+  --font-numeric: 'Monolithic', var(--font-mono);
+
+  /* Lumina gold - a genuine accent now, not a wash. The real game's UI is
+     near-monochrome (black/grey/cream) with gold kept for specific accent
+     moments (icons, key numbers, active state) - not on every border. */
+  --accent-color: #c9a86a;
+  --accent-hover: #e3c58a;
+  --accent-transparent: rgba(201, 168, 106, 0.12);
+  --accent-dim: rgba(201, 168, 106, 0.3);
+
+  --bg-void: #09090a;
+  --panel-bg: rgba(14, 13, 13, 0.94);
+  --panel-bg-flat: rgba(16, 15, 14, 0.92);
+  --card-bg: rgba(255, 255, 255, 0.025);
+  --card-bg-hover: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(201, 168, 106, 0.28);
+  --panel-shadow: 0 14px 34px 0 rgba(0, 0, 0, 0.55);
+
+  --text-main: #e8e4dc;
+  --text-muted: #8f897e;
+  --text-dim: #5c574f;
+
+  --success: #8fae6e;
+  --danger: #b23a3a;
+  --warn: #c98a3a;
+
+  --radius-lg: 10px;
+  --radius-md: 8px;
+  --radius-sm: 5px;
+
+  --transition: all 0.15s ease;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-main);
+  color: var(--text-main);
+  overflow: hidden; /* It's a dashboard wallpaper */
+  user-select: none;
+  background-color: var(--bg-void);
+  letter-spacing: -0.01em;
+}
+
+/* Background Layers */
+.bg-layer {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background-size: cover;
+  background-position: center;
+  z-index: -2;
+  transition: background-image 1s ease-in-out;
+}
+.bg-overlay {
+  /* No dimming at all - full brightness wallpaper, per Pete. Kept as an
+     empty layer (rather than deleting it) so index.html doesn't need a
+     matching edit if this ever gets revisited. */
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: transparent;
+  z-index: -1;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 20px 24px;
+  gap: 18px;
+}
+.columns-row {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  min-height: 0; /* let the widget columns' own overflow-y:auto work inside a flex row */
+}
+
+/* Panels - the real game's panels barely have a visible frame at all, just
+   soft shadow separation from the scene behind them. Flat and near-black,
+   not a gold-washed "glass card"; gold shows up in the content, not the
+   container. */
+.glass-header {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 30%),
+    var(--panel-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  box-shadow: var(--panel-shadow);
+  border-radius: var(--radius-lg);
+  padding: 12px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 62px;
+  position: relative;
+}
+/* Hairline divider under the header, quiet by default */
+.glass-header::after {
+  content: '';
+  position: absolute;
+  left: 22px; right: 22px; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-hover) 15%, var(--border-hover) 85%, transparent);
+  pointer-events: none;
+}
+.glass-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 25%),
+    var(--panel-bg-flat);
+  border: 1px solid var(--border);
+  box-shadow: var(--panel-shadow);
+  position: relative;
+}
+
+.header-left, .header-right { display: flex; align-items: center; gap: 14px; flex: 1; }
+.header-right { justify-content: flex-end; }
+.header-center { flex: 1.6; display: flex; justify-content: center; }
+
+.logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; letter-spacing: 0.03em; }
+.portrait-frame { position: relative; flex-shrink: 0; }
+.logo-portrait {
+  width: 30px; height: 30px; border-radius: 50%;
+  object-fit: cover; object-position: center 15%;
+  border: 1.5px solid var(--accent-dim);
+  box-shadow: 0 0 0 3px rgba(10,7,4,0.4), 0 0 10px -2px var(--accent-dim);
+  display: block;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+/* Critical system load - same "status ring goes red" language as CPU/RAM bars */
+.portrait-frame.critical .logo-portrait {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(10,7,4,0.4), 0 0 10px -1px rgba(178,58,58,0.7);
+}
+.portrait-frame.critical .portrait-badge { background: var(--danger); box-shadow: 0 0 4px 0 rgba(178,58,58,0.7); }
+/* Diamond rank-badge, the same convention the game itself uses to tag
+   character portraits on the Victory/party screens */
+.portrait-badge {
+  position: absolute; bottom: -3px; right: -3px;
+  width: 10px; height: 10px;
+  background: var(--accent-color);
+  border: 1.5px solid var(--bg-void);
+  transform: rotate(45deg);
+  box-shadow: 0 0 4px 0 rgba(201,168,106,0.6);
+}
+.text-accent { color: var(--accent-color); filter: drop-shadow(0 0 6px var(--accent-transparent)); }
+.logo-text {
+  /* NOT font-display (Cinzel) - it's a unicase display face, lowercase
+     letters just render as smaller caps, which silently turns "GLaDOS"
+     into "GLADOS" and loses the actual Portal reference in the name */
+  font-family: var(--font-main); font-weight: 700;
+  background: linear-gradient(120deg, var(--text-main) 30%, var(--accent-color) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+.status-badge {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; font-family: var(--font-mono); font-weight: 500;
+  padding: 5px 10px;
+  background: rgba(143, 174, 110, 0.08);
+  border: 1px solid rgba(143, 174, 110, 0.2);
+  border-radius: 999px; color: var(--success);
+}
+.dot { width: 6px; height: 6px; background: var(--success); transform: rotate(45deg); }
+.dot.pulse { animation: pulse 2s infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(143, 174, 110, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(143, 174, 110, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(143, 174, 110, 0); }
+}
+
+.clock-display { font-family: var(--font-numeric); font-size: 21px; font-weight: 400; line-height: 1.2; letter-spacing: 0.02em; }
+.date-display { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.header-right > div:nth-child(1) { text-align: right; }
+
+/* Search */
+.search-wrap { position: relative; width: 100%; max-width: 480px; }
+.search-box {
+  display: flex; align-items: center;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px; gap: 9px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+  transition: var(--transition);
+}
+.search-box:focus-within {
+  border-color: var(--accent-color);
+  background: rgba(10,7,4,0.72);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4), 0 0 0 3px var(--accent-transparent), 0 0 20px -6px var(--accent-dim);
+}
+.search-box i, .search-box svg { width: 15px; height: 15px; color: var(--text-muted); flex-shrink: 0; }
+.search-box input {
+  background: transparent; border: none; outline: none;
+  color: var(--text-main); font-family: var(--font-main); font-size: 13.5px; width: 100%;
+}
+.search-kbd {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; flex-shrink: 0;
+}
+.search-results {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+  background: var(--panel-bg);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--panel-shadow);
+  max-height: 400px; overflow-y: auto; display: none; z-index: 50;
+}
+.search-results.open { display: block; }
+.search-result-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); padding: 10px 14px 4px; }
+.search-result-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+.search-result-item:hover, .search-result-item.selected { background: var(--accent-transparent); }
+.search-result-item.selected { box-shadow: inset 2px 0 0 0 var(--accent-color); }
+.search-result-item i { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+.search-result-item .srname { font-weight: 500; }
+.search-result-item .srmeta { color: var(--text-dim); font-size: 11px; font-family: var(--font-mono); }
+.search-empty { padding: 16px; text-align: center; color: var(--text-dim); font-size: 12px; }
+
+.icon-btn {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--accent-color);
+  width: 38px; height: 38px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; transition: var(--transition);
+}
+.icon-btn i { width: 16px; height: 16px; }
+.icon-btn:hover { background: var(--accent-transparent); border-color: var(--accent-dim); color: var(--accent-hover); }
+.icon-btn-sm {
+  background: transparent; border: none; color: var(--text-dim);
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; transition: var(--transition);
+}
+.icon-btn-sm i { width: 14px; height: 14px; }
+.icon-btn-sm:hover { background: rgba(255,255,255,0.08); color: var(--text-main); }
+
+/* Widget column - a compact HUD in the corner, not a full-screen layout, so
+   the wallpaper itself stays the star of the show */
+.widget-column {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.widget-column::-webkit-scrollbar { width: 4px; }
+.widget-column::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.widget { border-radius: var(--radius-lg); padding: 16px; }
+.widget-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 13px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  /* (dropped the added top rule + padding - the double-hairline banner look
+     wasn't worth the extra height it added to every widget, three of which
+     stacked up pushed Folders off the bottom of the viewport) */
+}
+.widget-header h3 {
+  font-family: var(--font-display);
+  font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  display: flex; align-items: center; gap: 7px; color: var(--text-muted);
+}
+.widget-header i { width: 13px; height: 13px; }
+.widget-icon { width: 13px; height: 13px; object-fit: contain; filter: drop-shadow(0 0 2px rgba(0,0,0,0.5)); }
+.widget-icon-svg { width: 28px; height: 28px; color: var(--accent-color); flex-shrink: 0; }
+.header-btn-svg { width: 22px; height: 22px; }
+.uptime { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent-color); }
+
+.vitals-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.vital-item { display: flex; align-items: center; gap: 10px; }
+.vital-label { font-size: 11px; width: 30px; color: var(--text-muted); font-family: var(--font-mono); }
+.mount-leaf {
+  color: var(--text-main); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.disk-row { cursor: pointer; border-radius: 4px; transition: var(--transition); }
+.disk-row:hover { background: rgba(201,168,106,0.06); }
+.disk-row:hover .mount-leaf { color: var(--accent-color); }
+.mount-group {
+  font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.progress-track { flex: 1; height: 5px; background: rgba(178, 58, 58, 0.12); border-radius: 3px; overflow: hidden; }
+.progress-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent-color), var(--accent-hover)); width: 0%;
+  border-radius: 3px; transition: width 0.5s ease, background 0.3s ease; box-shadow: 0 0 8px 0 var(--accent-transparent);
+}
+/* Critical state - the game's own health bar goes red under threat; same
+   language here when CPU/RAM run hot */
+.progress-fill.critical {
+  background: linear-gradient(90deg, var(--danger), #d65858);
+  box-shadow: 0 0 8px 0 rgba(178,58,58,0.4);
+}
+.vital-val { font-size: 12.5px; font-family: var(--font-numeric); width: 30px; text-align: right; color: var(--text-muted); }
+.widget-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+
+/* Right column - Downloads / Container Health / Recently Added */
+.downloads-empty, .health-empty { font-size: 11.5px; color: var(--text-dim); text-align: center; padding: 6px 0; }
+
+.health-list { display: flex; flex-direction: column; gap: 8px; }
+.health-item {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+  background: rgba(178,58,58,0.07); border: 1px solid rgba(178,58,58,0.25); border-radius: var(--radius-sm);
+  box-shadow: inset 2px 0 0 0 var(--danger);
+}
+.health-item .health-name { font-size: 12.5px; font-weight: 500; color: var(--text-main); }
+.health-item .health-status { font-size: 10.5px; color: var(--danger); font-family: var(--font-mono); }
+
+.recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.recent-item {
+  position: relative; aspect-ratio: 2/3; border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--border); cursor: pointer; transition: var(--transition);
+}
+.recent-item:hover { border-color: var(--accent-dim); }
+/* Only genuinely new items animate in - existing items render statically,
+   and renderRecentGrid() itself skips the DOM entirely when the visible
+   set hasn't changed, so a routine 5s poll doesn't replay this. */
+@keyframes recentSlideIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+.recent-item.is-new { animation: recentSlideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.recent-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.recent-item .recent-title {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 5px 3px;
+  font-size: 9.5px; line-height: 1.25; color: var(--text-main);
+  background: linear-gradient(0deg, rgba(0,0,0,0.98) 40%, rgba(0,0,0,0.7) 80%, transparent 100%);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.7);
+}
+.recent-item .recent-episode-badge {
+  position: absolute; top: 4px; left: 4px; padding: 2px 5px;
+  background: rgba(10,7,4,0.72); border-radius: 4px; box-shadow: 0 0 3px rgba(0,0,0,0.6);
+  color: var(--accent-color); font-family: var(--font-mono); font-weight: 600;
+  font-size: 8.5px; letter-spacing: 0.03em; line-height: 1.4;
+}
+.recent-item .recent-title-text {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+/* Immich titles are just raw camera filenames (PXL_2026...) - not worth showing */
+.recent-item.source-immich .recent-title { display: none; }
+.recent-item .recent-type-badge {
+  position: absolute; top: 4px; right: 4px; width: 17px; height: 17px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10,7,4,0.72); border-radius: 4px; color: var(--accent-color);
+  box-shadow: 0 0 3px rgba(0,0,0,0.6);
+}
+.recent-item .recent-type-badge svg { width: 11px; height: 11px; }
+.recent-item.source-immich .recent-type-badge { color: var(--success); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 12px; border-radius: var(--radius-sm);
+  font-family: var(--font-main); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: var(--transition); border: 1px solid transparent;
+}
+.btn i, .btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+.btn-sm { padding: 6px 10px; font-size: 11.5px; }
+.btn-ghost { background: rgba(255,255,255,0.03); color: var(--text-main); border-color: var(--border); }
+.btn-ghost:hover { background: rgba(255,255,255,0.07); border-color: var(--border-hover); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-hover), var(--accent-color));
+  color: #241a0a; font-weight: 600;
+  box-shadow: 0 2px 12px -4px var(--accent-dim);
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.link-item {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 8px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  border-left: 2px solid var(--accent-dim); /* the game's own item-pickup notification cards
+                   ("New Weapon", "New Pictos") carry a colored left-edge accent stripe - same move here */
+  color: var(--text-main); text-decoration: none; font-size: 12.5px;
+  transition: var(--transition); cursor: pointer; position: relative;
+  min-width: 0; /* let the item shrink below its text's content-width inside the grid track, or long
+                   labels (esp. in edit mode's wider padding) force the whole grid column to overflow
+                   and get clipped by the sidebar's implicit overflow-x - classic flex/grid min-width:auto trap */
+}
+.link-item:hover { background: var(--card-bg-hover); border-color: var(--border-hover); border-left-color: var(--accent-color); }
+.link-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-item img, .link-item i, .link-item svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--text-muted); }
+
+/* Edit Mode Helpers */
+.edit-only { display: none; }
+body.edit-mode .edit-only { display: inline-flex; }
+body.edit-mode .link-item .edit-btn {
+  position: absolute; top: 7px; right: 7px;
+  background: var(--accent-transparent); border: 1px solid var(--accent-dim); color: var(--accent-color);
+  width: 22px; height: 22px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10;
+}
+body.edit-mode .edit-btn i { width: 12px; height: 12px; }
+body.edit-mode .link-item { padding-right: 34px; }
+
+/* Modals */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+  z-index: 200; display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: var(--transition);
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  width: 380px; max-width: 90vw; padding: 20px; border-radius: var(--radius-lg);
+  transform: translateY(14px); transition: var(--transition);
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.modal-header h3 { font-size: 14px; font-weight: 600; }
+.form-group { margin-bottom: 13px; }
+.form-group label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.input-modern {
+  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 11px; color: var(--text-main); font-family: var(--font-main); font-size: 13px;
+  outline: none; transition: var(--transition);
+}
+.input-modern:focus { border-color: var(--accent-dim); background: rgba(0,0,0,0.45); }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: -60px; left: 50%; transform: translateX(-50%);
+  background: rgba(20,22,26,0.92); backdrop-filter: blur(14px); border: 1px solid var(--border-hover);
+  padding: 10px 20px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35); z-index: 300; transition: bottom 0.35s ease;
+}
+.toast.show { bottom: 60px; }

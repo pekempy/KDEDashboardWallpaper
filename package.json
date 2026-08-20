@@ -1,0 +1,17 @@
+{
+  "name": "kde-desktop-dashboard",
+  "version": "1.0.0",
+  "description": "A highly customizable 24/7 local dashboard to monitor system stats and launch/manage development projects from a YAML configuration.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "js-yaml": "^4.1.0",
+    "systeminformation": "^5.22.9"
+  }
+}
