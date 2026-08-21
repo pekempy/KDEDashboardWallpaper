@@ -157,6 +157,7 @@
             </svg>
             Container Health
           </h3>
+          <button class="icon-btn-sm" title="Open Dockhand" onclick="app.openDockhand()"><i data-lucide="external-link"></i></button>
         </div>
         <div class="health-list" id="health-list"></div>
       </div>
@@ -203,6 +204,20 @@
           <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
           <button class="btn btn-primary" id="btn-save-edit">Save Changes</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div class="modal-overlay" id="logs-modal">
+      <div class="glass-card modal modal-wide">
+        <div class="modal-header">
+          <h3 id="logs-modal-title">Container Logs</h3>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn-sm" title="Refresh" onclick="app.refreshLogs()"><i data-lucide="refresh-cw"></i></button>
+            <button class="icon-btn-sm" onclick="app.closeLogsModal()"><i data-lucide="x"></i></button>
+          </div>
+        </div>
+        <pre class="log-viewer" id="logs-content"></pre>
       </div>
     </div>
 

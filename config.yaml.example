@@ -28,6 +28,11 @@ integrations:
     url: http://localhost:2283
     public_url: ''
     api_key: ''
+# Optional - "Open Dockhand" shortcut button in the Container Health widget
+# header (shown whenever an unhealthy/restarting container is detected).
+# Leave the url blank to hide/disable that button.
+dockhand:
+  url: ''
 ui:
   title: My Dashboard
   theme: dark

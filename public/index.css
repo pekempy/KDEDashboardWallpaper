@@ -317,6 +317,7 @@ body {
 }
 .health-item .health-name { font-size: 12.5px; font-weight: 500; color: var(--text-main); }
 .health-item .health-status { font-size: 10.5px; color: var(--danger); font-family: var(--font-mono); }
+.health-item .icon-btn-sm { flex-shrink: 0; }
 
 .recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .recent-item {
@@ -429,6 +430,14 @@ body.edit-mode .link-item { padding-right: 34px; }
 }
 .input-modern:focus { border-color: var(--accent-dim); background: rgba(0,0,0,0.45); }
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.modal-wide { width: 1100px; }
+.log-viewer {
+  max-height: 60vh; overflow: auto; margin: 0; padding: 12px 14px;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; color: var(--text-main);
+}
+.log-line { white-space: pre; }
+.log-line.wrap { white-space: pre-wrap; padding-left: 9ch; text-indent: -9ch; }
 
 /* Toast */
 .toast {

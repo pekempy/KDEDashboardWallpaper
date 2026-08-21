@@ -17,6 +17,11 @@ dashboard) so the wallpaper itself stays visible.
   Docker containers at once - containers are queried live via `docker ps`
   (not persisted), and only ones with a published port show up, since
   those are the only ones with something to open in a browser.
+- **Container Health**: widget surfaces any unhealthy/restarting containers
+  (via `docker ps -a`). Each one has a logs button that opens a modal with
+  its `docker logs` output (long lines wrap with a hanging indent instead of
+  bleeding off the edge), plus an "Open Dockhand" shortcut in the widget
+  header - see `dockhand.url` in `config.yaml.example`.
 - **Random background**: click the image icon (or hit the API) to pull a new
   wallpaper from rclone; broadcasts live over SSE so the window updates
   without a reload.

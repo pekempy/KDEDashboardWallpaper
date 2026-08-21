@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import si from 'systeminformation';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,6 +33,7 @@ function loadConfig() {
     if (!config.bookmarks) config.bookmarks = [];
     if (!config.system) config.system = {};
     if (!config.background) config.background = {};
+    if (!config.dockhand) config.dockhand = {};
     console.log('[Server] Configuration loaded/reloaded.');
     return true;
   } catch (e) {
@@ -206,6 +207,25 @@ app.get('/api/docker/unhealthy', (req, res) => {
   });
 });
 
+// Docker prints --timestamps as full RFC3339Nano (2026-08-21T07:08:47.587360692Z) -
+// nine digits of sub-second precision and a date nobody reading a log widget needs. Trim to "HH:MM:SS".
+function trimLogTimestamps(text) {
+  return text.replace(/^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})\.\d+Z/gm, '$1');
+}
+
+// Docker logs for one container - used by the unhealthy-widget's log modal.
+// execFile (not exec) so the name is passed as a real argv entry, never through a shell.
+app.get('/api/docker/logs/:name', (req, res) => {
+  const { name } = req.params;
+  execFile('docker', ['logs', '--tail', '400', '--timestamps', name], { maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {
+    if (error && !stdout && !stderr) {
+      console.error(`[API] docker logs failed for ${name}:`, error.message);
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ logs: trimLogTimestamps(`${stdout}${stderr}`) || '(no log output)' });
+  });
+});
+
 // Active downloads - merges NZBget (usenet) and qBittorrent-via-qui (torrents)
 app.get('/api/downloads/active', async (req, res) => {
   const results = [];
@@ -260,7 +280,7 @@ app.get('/api/media/recent', async (req, res) => {
   if (jellyfin) {
     try {
       const r = await fetch(
-        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode`,
+        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated`,
         { headers: { 'X-Emby-Token': jellyfin.token } }
       );
       const data = await r.json();
@@ -279,6 +299,7 @@ app.get('/api/media/recent', async (req, res) => {
             ? `S${item.ParentIndexNumber}E${item.IndexNumber}` : null,
           thumbUrl: `/api/media/thumb/jellyfin/${imageId}`,
           linkUrl: `${jellyfin.public_url || jellyfin.url}/web/index.html#/details?id=${item.Id}&serverId=${item.ServerId}`,
+          addedAt: item.DateCreated,
         });
       });
     } catch (err) {
@@ -302,12 +323,18 @@ app.get('/api/media/recent', async (req, res) => {
           type: asset.type === 'VIDEO' ? 'Video' : 'Photo',
           thumbUrl: `/api/media/thumb/immich/${asset.id}`,
           linkUrl: `${immich.public_url || immich.url}/photos/${asset.id}`,
+          addedAt: asset.fileCreatedAt || asset.localDateTime,
         });
       });
     } catch (err) {
       console.error('[API] Immich fetch failed:', err.message);
     }
   }
+
+  // Interleave both sources by actual timestamp instead of the previous
+  // "9 jellyfin then 9 immich" block order, so the grid reads as one
+  // real-world-chronological feed.
+  results.sort((a, b) => new Date(b.addedAt || 0) - new Date(a.addedAt || 0));
 
   res.json(results);
 });

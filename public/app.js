@@ -183,13 +183,67 @@ class DashboardApp {
             <div class="health-name">${c.name}</div>
             <div class="health-status">${c.status}</div>
           </div>
+          <button class="icon-btn-sm" title="View logs" data-logs-name="${c.name}"><i data-lucide="scroll-text"></i></button>
         </div>
       `).join('');
+      el.querySelectorAll('[data-logs-name]').forEach(btn => {
+        btn.onclick = () => this.openLogsModal(btn.dataset.logsName);
+      });
+      lucide.createIcons();
       this.renderRecentGrid();
     } catch (err) {
       widget.style.display = 'none';
       this.renderRecentGrid();
     }
+  }
+
+  async openLogsModal(name) {
+    this.currentLogsContainer = name;
+    document.getElementById('logs-modal-title').innerText = `Logs: ${name}`;
+    document.getElementById('logs-content').innerText = 'Loading...';
+    document.getElementById('logs-modal').classList.add('open');
+    await this.refreshLogs();
+  }
+
+  closeLogsModal() {
+    document.getElementById('logs-modal').classList.remove('open');
+    this.currentLogsContainer = null;
+  }
+
+  async refreshLogs() {
+    const name = this.currentLogsContainer;
+    if (!name) return;
+    const el = document.getElementById('logs-content');
+    try {
+      const res = await fetch(`/api/docker/logs/${encodeURIComponent(name)}`);
+      const data = await res.json();
+      this.renderLogLines(el, data.logs || data.error || '(no log output)');
+    } catch (err) {
+      el.innerText = 'Failed to fetch logs.';
+    }
+  }
+
+  // Most lines are short and read best unwrapped (horizontal scroll). Only the
+  // outliers - stack traces, huge JSON blobs - get wrapped, and wrapped
+  // continuation lines hang-indent to line up under the timestamp's end
+  // (the "HH:MM:SS " prefix server.js leaves on every line, 9 chars wide).
+  renderLogLines(el, text) {
+    const lines = text.split('\n');
+    const lengths = lines.map(l => l.length).filter(len => len > 0).sort((a, b) => a - b);
+    const median = lengths.length ? lengths[Math.floor(lengths.length / 2)] : 0;
+    const threshold = median * 1.5;
+    const escapeHtml = (s) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    el.innerHTML = lines.map(line => {
+      const wrap = median > 0 && line.length > threshold;
+      return `<div class="log-line${wrap ? ' wrap' : ''}">${escapeHtml(line)}</div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  openDockhand() {
+    const url = this.config?.dockhand?.url || this.config?.bookmarks?.find(b => b.name === 'Dockhand Client')?.url;
+    if (!url) return this.showToast('Set dockhand.url in config.yaml to use this button');
+    this.openExternal(url);
   }
 
   async fetchRecentMedia() {
