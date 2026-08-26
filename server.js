@@ -14,6 +14,9 @@ process.env.TERM = process.env.TERM || 'xterm-256color';
 
 const app = express();
 app.use(cors());
+app.get('/api/display', (req, res) => {
+  res.json(config.display || {});
+});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -399,6 +402,7 @@ app.get('/api/system/stats', async (req, res) => {
 async function randomizeBackground() {
   const { rclone_remote: remote, rclone_path: remotePath } = config.background || {};
   if (!remote) {
+    console.error('[Server] background.rclone_remote NOT FOUND in config:', config.background);
     return Promise.reject(new Error('background.rclone_remote not configured - skipping background rotation'));
   }
   const remoteBase = `${remote}:${remotePath || ''}`;

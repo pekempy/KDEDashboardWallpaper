@@ -21,27 +21,45 @@ done
 
 # 3. Kill any existing instances of the wallpaper window
 echo "Cleaning up existing wallpaper window instances..."
-pkill -f "aether_gui.py" || true
+pkill -f "dashboard-wallpaper" || true
 pkill -f "dashboard-wallpaper-profile" || true
 sleep 1
 
-# 4. Start Chrome in app mode with GPU acceleration and a dedicated profile
-echo "Starting Google Chrome wallpaper window..."
-google-chrome \
-  --app=http://localhost:4848 \
-  --class=dashboard-wallpaper \
-  --user-data-dir="$HOME/.config/dashboard-wallpaper-profile" \
-  --no-first-run \
-  --no-default-browser-check \
-  --enable-gpu-rasterization \
-  --enable-zero-copy \
-  --ignore-gpu-blocklist \
-  --autoplay-policy=no-user-gesture-required \
-  --password-store=basic \
-  --disable-renderer-backgrounding \
-  --disable-background-timer-throttling \
-  --disable-backgrounding-occluded-windows \
-  "$@" > /dev/null 2>&1 &
+# 4. Launch a dedicated Chrome window for each monitor defined in config
+echo "Launching wallpaper windows for each monitor..."
 
-echo "Wallpaper window launched successfully in the background."
+# Read the config to get display order
+ORDER=$(python3 -c "import yaml; print(','.join(map(str, yaml.safe_load(open('$CWD/config.yaml'))['display']['order'])))")
+IFS=',' read -r -a MONITOR_ORDER <<< "$ORDER"
+
+i=0
+for monitor_id in "${MONITOR_ORDER[@]}"; do
+  # Simple positioning logic (assumes left-to-right 1920x1080)
+  X_POS=$(( i * 1920 ))
+  SCREEN_NUM=$(( i + 1 ))
+  
+  google-chrome-stable \
+    --app="http://localhost:4848/?screen=$SCREEN_NUM" \
+    --class="dashboard-wallpaper" \
+    --user-data-dir="$HOME/.config/dashboard-wallpaper-profile-screen-$SCREEN_NUM" \
+    --window-position="$X_POS,0" \
+    --window-size=1920,1080 \
+    --no-first-run \
+    --no-default-browser-check \
+    --enable-gpu-rasterization \
+    --enable-zero-copy \
+    --ignore-gpu-blocklist \
+    --autoplay-policy=no-user-gesture-required \
+    --password-store=basic \
+    --disable-renderer-backgrounding \
+    --disable-background-timer-throttling \
+    --disable-backgrounding-occluded-windows \
+    --ozone-platform=x11 \
+    "$@" > /dev/null 2>&1 &
+
+  echo "Launched screen $SCREEN_NUM (physical $monitor_id) at position $X_POS,0"
+  i=$((i+1))
+done
+
+echo "Wallpaper windows launched successfully in the background."
 echo "=========================================="

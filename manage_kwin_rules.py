@@ -59,9 +59,9 @@ def main():
         count += 1
         rules_list.append(rule_id)
         
-        # Update General section using kwriteconfig5
-        run_command(f'kwriteconfig5 --file ~/.config/kwinrulesrc --group General --key count "{count}"')
-        run_command(f'kwriteconfig5 --file ~/.config/kwinrulesrc --group General --key rules "{",".join(rules_list)}"')
+        # Update General section using kwriteconfig6
+        run_command(f'kwriteconfig6 --file ~/.config/kwinrulesrc --group General --key count "{count}"')
+        run_command(f'kwriteconfig6 --file ~/.config/kwinrulesrc --group General --key rules "{",".join(rules_list)}"')
     
     # 3. Set the properties for the rule
     properties = {
@@ -110,19 +110,16 @@ def main():
         "size": "1920,1080",
         "sizerule": "2",              # 2 = Force
         
-        # Position (0,0)
-        "position": "0,0",
-        "positionrule": "2",          # 2 = Force
     }
     
     for key, value in properties.items():
-        run_command(f'kwriteconfig5 --file ~/.config/kwinrulesrc --group "{rule_id}" --key "{key}" "{value}"')
+        run_command(f'kwriteconfig6 --file ~/.config/kwinrulesrc --group "{rule_id}" --key "{key}" "{value}"')
         
     print("Rule properties configured successfully.")
     
     # 4. Trigger KWin reload
     print("Triggering KWin reconfiguration...")
-    run_command("qdbus org.kde.KWin /KWin reconfigure")
+    run_command("qdbus6 org.kde.KWin /KWin reconfigure")
     print("KWin rules reconfigured and reloaded successfully.")
 
 if __name__ == "__main__":

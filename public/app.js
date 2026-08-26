@@ -1,3 +1,4 @@
+console.log('app.js loaded');
 class DashboardApp {
   constructor() {
     this.config = null;
@@ -15,36 +16,68 @@ class DashboardApp {
     this.init();
   }
 
+  getScreenAssignment() {
+    const params = new URLSearchParams(window.location.search);
+    return parseInt(params.get('screen') || '1', 10);
+  }
+
+  shouldShowWidget(widgetName) {
+    if (!this.displayConfig || !this.displayConfig.widgets || !this.displayConfig.widgets[widgetName]) return false;
+    return this.displayConfig.widgets[widgetName].includes(this.screenId);
+  }
+
   async init() {
-    this.setupClock();
-    this.setupPortrait();
-    this.bindEvents();
+    console.log('[Init] Starting...');
+    try {
+      this.setupClock();
+      this.setupPortrait();
+      this.bindEvents();
+      console.log('[Init] Setup done');
 
-    await this.fetchConfig();
-    this.fetchSystemStats();
-    this.fetchDockerContainers();
-    this.fetchDownloads();
-    this.fetchContainerHealth();
-    this.fetchRecentMedia();
-    this.setupSSE();
+      await this.fetchConfig();
+      console.log('[Init] Config fetched:', this.config);
+      
+      this.displayConfig = await (await fetch('/api/display')).json();
+      console.log('[Init] Display config fetched:', this.displayConfig);
+      
+      this.screenId = this.getScreenAssignment();
+      console.log('[Init] ScreenId:', this.screenId);
+      
+      this.fullRender();
+      console.log('[Init] Rendered');
 
-    document.getElementById('bg-layer').style.backgroundImage = `url('/background.jpg?t=${Date.now()}')`;
+      this.fetchDockerContainers();
+      this.fetchDownloads();
+      this.fetchContainerHealth();
+      this.fetchRecentMedia();
+      this.setupSSE();
 
-    setInterval(() => this.fetchSystemStats(), 5000);
-    setInterval(() => this.fetchDockerContainers(), 15000);
-    setInterval(() => this.fetchDownloads(), 5000);
-    setInterval(() => this.fetchContainerHealth(), 5000);
-    setInterval(() => this.fetchRecentMedia(), 60000);
+      const bgLayer = document.getElementById('bg-layer');
+      bgLayer.style.backgroundImage = `url('/background.jpg?t=${Date.now()}')`;
+      
+      // Position background to span across monitors
+      // Screen 1: Left, Screen 2: Center, Screen 3: Right
+      const positions = ['0% 50%', '50% 50%', '100% 50%'];
+      bgLayer.style.setProperty('background-position', positions[this.screenId - 1] || 'center', 'important');
+      bgLayer.style.setProperty('background-size', '300% 100%', 'important');
 
-    lucide.createIcons();
+      setInterval(() => this.fetchSystemStats(), 5000);
+      setInterval(() => this.fetchDockerContainers(), 15000);
+      setInterval(() => this.fetchDownloads(), 5000);
+      setInterval(() => this.fetchContainerHealth(), 5000);
+      setInterval(() => this.fetchRecentMedia(), 60000);
+
+      lucide.createIcons();
+      console.log('[Init] Finished');
+    } catch (e) {
+      console.error('[Init] Failed:', e);
+    }
   }
 
   homeDir() {
     return this.config?.system?.home_dir || '/';
   }
 
-  // Rotates through the Expedition 33 party portraits, one per day (stable
-  // through the day, changes at midnight - same rhythm as the date display).
   setupPortrait() {
     const party = ['gustave', 'lune', 'maelle', 'monoco', 'sciel', 'verso'];
     const dayIndex = Math.floor(Date.now() / 86400000);
@@ -100,12 +133,8 @@ class DashboardApp {
         searchInput.focus();
         return;
       }
-      // Type-to-search: any plain printable character jumps focus to the
-      // search box and starts filling it, no need to click/press "/" first.
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         searchInput.focus();
-        // don't preventDefault - letting the keypress fall through inserts
-        // this same character into the now-focused input naturally
       }
     });
   }
@@ -141,7 +170,7 @@ class DashboardApp {
     try {
       const res = await fetch('/api/docker/containers');
       this.dockerContainers = await res.json();
-    } catch (err) { /* ignore - search just won't show containers */ }
+    } catch (err) { /* ignore */ }
   }
 
   async fetchDownloads() {
@@ -152,7 +181,7 @@ class DashboardApp {
       const items = await res.json();
       this.activeDownloadsCount = items.length;
       if (!items.length) { widget.style.display = 'none'; this.renderRecentGrid(); return; }
-      widget.style.display = '';
+      widget.style.display = this.shouldShowWidget('downloads') ? '' : 'none';
       el.innerHTML = items.map(d => `
         <div class="vital-item" style="margin-top: 6px;">
           <div class="vital-label mount-leaf" style="width: auto; font-size: 10.5px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${d.name}">${d.name}</div>
@@ -175,7 +204,7 @@ class DashboardApp {
       const res = await fetch('/api/docker/unhealthy');
       const items = await res.json();
       if (!items.length) { widget.style.display = 'none'; this.renderRecentGrid(); return; }
-      widget.style.display = '';
+      widget.style.display = this.shouldShowWidget('container_health') ? '' : 'none';
       el.innerHTML = items.map(c => `
         <div class="health-item">
           <span class="dot" style="background: var(--danger);"></span>
@@ -223,10 +252,6 @@ class DashboardApp {
     }
   }
 
-  // Most lines are short and read best unwrapped (horizontal scroll). Only the
-  // outliers - stack traces, huge JSON blobs - get wrapped, and wrapped
-  // continuation lines hang-indent to line up under the timestamp's end
-  // (the "HH:MM:SS " prefix server.js leaves on every line, 9 chars wide).
   renderLogLines(el, text) {
     const lines = text.split('\n');
     const lengths = lines.map(l => l.length).filter(len => len > 0).sort((a, b) => a - b);
@@ -251,10 +276,9 @@ class DashboardApp {
       const res = await fetch('/api/media/recent');
       this.recentMediaItems = await res.json();
       this.renderRecentGrid();
-    } catch (err) { /* leave whatever was last rendered */ }
+    } catch (err) { /* ignore */ }
   }
 
-  // Type badge icon, small enough to sit in a thumbnail corner
   recentTypeIcon(type) {
     const icons = {
       Movie: '<path d="M3 9l1.5-4h15L18 9Z"/><rect x="3" y="9" width="18" height="11" rx="1.2"/><path d="M7 5l2 4M13 5l2 4"/>',
@@ -267,11 +291,6 @@ class DashboardApp {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
   }
 
-  // Measures actual rendered layout (not a guessed formula) to work out how
-  // many grid rows of Recently Added actually fit in whatever space
-  // Downloads/Container Health left behind - 3 items (1 row) minimum,
-  // 18 (6 rows) maximum, and it fills the whole column when it's the only
-  // widget showing.
   computeRecentCapacity() {
     const column = document.querySelector('.widget-column-right');
     const dlWidget = document.getElementById('widget-downloads');
@@ -283,7 +302,7 @@ class DashboardApp {
 
     const visibleSiblingHeight = dlWidget.offsetHeight + healthWidget.offsetHeight;
     const visibleSiblingCount = (dlWidget.offsetHeight > 0 ? 1 : 0) + (healthWidget.offsetHeight > 0 ? 1 : 0);
-    const columnGap = 14; // .widget-column { gap: 14px }
+    const columnGap = 14; 
     const consumedBySiblings = visibleSiblingHeight + visibleSiblingCount * columnGap;
 
     const widgetStyle = getComputedStyle(recentWidget);
@@ -293,9 +312,9 @@ class DashboardApp {
 
     const availableForGrid = column.clientHeight - consumedBySiblings - chrome;
 
-    const gridGap = 8; // .recent-grid { gap: 8px }
+    const gridGap = 8; 
     const colWidth = (grid.clientWidth - gridGap * 2) / 3;
-    const rowHeight = colWidth * 1.5; // .recent-item { aspect-ratio: 2/3 }
+    const rowHeight = colWidth * 1.5; 
     if (rowHeight <= 0) return 9;
 
     const rows = Math.floor((availableForGrid + gridGap) / (rowHeight + gridGap));
@@ -308,10 +327,6 @@ class DashboardApp {
     const maxItems = this.computeRecentCapacity();
     const shown = items.slice(0, maxItems);
 
-    // Downloads/Container Health poll every 5s and both call this to keep
-    // capacity current, but that's not a reason to touch the DOM - only
-    // actually re-render (and thus only actually animate) when the visible
-    // set of items has genuinely changed.
     const shownKey = shown.map(m => m.id).join(',');
     if (shownKey === this.lastRenderedShownKey) return;
     this.lastRenderedShownKey = shownKey;
@@ -337,8 +352,6 @@ class DashboardApp {
     });
   }
 
-  // Groups flat mount paths into a tree so shared parents (mnt/plex/*) print
-  // once instead of repeating on every row.
   renderDiskTree(disks) {
     const root = {};
     disks.forEach(d => {
@@ -368,10 +381,8 @@ class DashboardApp {
         const child = node[key];
         const childKeys = Object.keys(child).filter(k => k !== '__leaf');
         if (childKeys.length === 0) {
-          // no children beyond its own leaf - render as one bar, no group header
           html += bar(key, child.__leaf, depth);
         } else if (child.__leaf) {
-          // has its own value AND children (shouldn't happen for real mounts, but handle it)
           html += bar(key, child.__leaf, depth);
           html += walk(child, depth + 1);
         } else {
@@ -402,7 +413,6 @@ class DashboardApp {
       ramBar.classList.toggle('critical', ramPercent >= 85);
       document.getElementById('ram-val').innerText = ramPercent + '%';
 
-      // Portrait ring mirrors the battle HUD's colored character-status ring
       document.querySelector('.portrait-frame')?.classList.toggle('critical', Math.max(cpuVal, ramPercent) >= 85);
 
       const diskVitalsEl = document.getElementById('disk-vitals');
@@ -421,10 +431,29 @@ class DashboardApp {
   fullRender() {
     if (!this.config) return;
     if (this.config.ui) {
-      if (this.config.ui.title) document.title = this.config.ui.title;
-      if (this.config.ui.accent_color) {
-        document.documentElement.style.setProperty('--accent-color', this.config.ui.accent_color);
+      if (this.config.ui.title) {
+        document.title = this.config.ui.title;
+        const logo = document.getElementById('logo-text');
+        if (logo) logo.innerText = this.config.ui.title;
       }
+      
+      const widgetMap = { 
+        'widget-downloads': 'downloads', 
+        'widget-health': 'container_health', 
+        'widget-recent': 'media_recent',
+        'widget-vitals': 'vitals',
+        'widget-bookmarks': 'bookmarks',
+        'widget-folders': 'folders'
+      };
+      
+      Object.entries(widgetMap).forEach(([id, configKey]) => {
+        const el = document.getElementById(id);
+        if (el) {
+          const show = this.shouldShowWidget(configKey);
+          el.style.setProperty('display', show ? '' : 'none', 'important');
+        }
+      });
+      document.documentElement.style.setProperty('--accent-color', this.config.ui.accent_color);
     }
     this.renderShortcuts(this.config.bookmarks, 'bookmarks-grid', 'bookmark', 'globe');
     this.renderShortcuts(this.config.quick_links, 'folders-grid', 'shortcut', 'folder');
@@ -480,7 +509,6 @@ class DashboardApp {
     }
   }
 
-  // Search across bookmarks + folders + running docker containers
   renderSearchResults() {
     const box = document.getElementById('search-results');
     const q = this.searchQuery;
@@ -557,7 +585,6 @@ class DashboardApp {
     document.getElementById('search-results').classList.remove('open');
   }
 
-  // Actions
   async executeCmd(cmd, cmdPath) {
     try {
       const res = await fetch('/api/action/command', {
@@ -590,10 +617,10 @@ class DashboardApp {
   }
 
   launchKonsole() { this.executeCmd('konsole', this.homeDir()); }
-  // `update` is a zsh alias (not a function) - aliases expand at parse time,
-  // so sourcing .zshrc mid-line via `.` runs too late. `-i` sources .zshrc
-  // during the shell's own startup, before the -c string is parsed at all.
-  launchUpdate() { this.executeCmd(`konsole -e zsh -i -c 'update; exec zsh'`, this.homeDir()); }
+  launchUpdate() {
+    const cmd = this.config?.system?.update_command || 'zsh -i -c "update; exec zsh"';
+    this.executeCmd(`konsole -e ${cmd}`, this.homeDir());
+  }
 
   showToast(msg) {
     const t = document.getElementById('toast');
@@ -602,7 +629,6 @@ class DashboardApp {
     setTimeout(() => t.classList.remove('show'), 3000);
   }
 
-  // Edit Mode Flow
   toggleEditMode() {
     this.isEditMode = !this.isEditMode;
     document.body.classList.toggle('edit-mode', this.isEditMode);
@@ -663,6 +689,4 @@ class DashboardApp {
     }
   }
 }
-
-// Boot
 window.app = new DashboardApp();
