@@ -135,6 +135,20 @@
 
     <aside class="widget-column widget-column-right">
 
+      <div class="glass-card widget" id="widget-nowplaying">
+        <div class="widget-header">
+          <h3>
+            <svg class="widget-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9.5"/>
+              <path d="M10 8.3 16 12 10 15.7Z" fill="currentColor" stroke="none"/>
+            </svg>
+            <span>Now Playing</span><span class="widget-count" id="nowplaying-count"></span>
+          </h3>
+          <button class="icon-btn-sm collapse-toggle" title="Collapse" onclick="app.toggleWidgetCollapse('nowplaying')"><i data-lucide="chevron-up"></i></button>
+        </div>
+        <div class="nowplaying-list" id="nowplaying-list"></div>
+      </div>
+
       <div class="glass-card widget" id="widget-downloads">
         <div class="widget-header">
           <h3>
@@ -142,8 +156,9 @@
               <path d="M12 2.5v10.5M8 9.5 12 13.5 16 9.5"/>
               <path d="M4 17.5h16M4 21h10"/>
             </svg>
-            Downloads
+            <span>Downloads</span><span class="widget-count" id="downloads-count"></span>
           </h3>
+          <button class="icon-btn-sm collapse-toggle" title="Collapse" onclick="app.toggleWidgetCollapse('downloads')"><i data-lucide="chevron-up"></i></button>
         </div>
         <div class="downloads-list" id="downloads-list"></div>
       </div>
@@ -155,9 +170,12 @@
               <path d="M12 2.5 20 6v6c0 5-3.5 8.5-8 9.5-4.5-1-8-4.5-8-9.5V6Z"/>
               <path d="M9 12h2l1-2.5 1.5 5 1.5-2.5h2"/>
             </svg>
-            Container Health
+            <span>Container Health</span><span class="widget-count" id="health-count"></span>
           </h3>
-          <button class="icon-btn-sm" title="Open Dockhand" onclick="app.openDockhand()"><i data-lucide="external-link"></i></button>
+          <div class="widget-header-actions">
+            <button class="icon-btn-sm" title="Open Dockhand" onclick="app.openDockhand()"><i data-lucide="external-link"></i></button>
+            <button class="icon-btn-sm collapse-toggle" title="Collapse" onclick="app.toggleWidgetCollapse('health')"><i data-lucide="chevron-up"></i></button>
+          </div>
         </div>
         <div class="health-list" id="health-list"></div>
       </div>
@@ -204,6 +222,41 @@
           <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
           <button class="btn btn-primary" id="btn-save-edit">Save Changes</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Stream Details Modal (popout for a Now Playing row) -->
+    <div class="modal-overlay" id="stream-modal">
+      <div class="glass-card modal modal-stream">
+        <div class="modal-header">
+          <h3>Stream Details</h3>
+          <button class="icon-btn-sm" onclick="app.closeStreamModal()"><i data-lucide="x"></i></button>
+        </div>
+        <div class="stream-modal-hero">
+          <div class="np-poster-wrap">
+            <img class="np-poster" id="stream-modal-poster" src="" alt="">
+            <img class="np-avatar" id="stream-modal-avatar" src="" alt="">
+          </div>
+          <div class="stream-modal-heading">
+            <div class="stream-modal-title" id="stream-modal-title"></div>
+            <div class="stream-modal-subtitle" id="stream-modal-subtitle"></div>
+          </div>
+        </div>
+        <div class="stream-modal-progress">
+          <div class="progress-track"><div class="progress-fill" id="stream-modal-progress-fill"></div></div>
+          <div class="stream-modal-progress-meta">
+            <span id="stream-modal-started"></span>
+            <span id="stream-modal-percent"></span>
+            <span id="stream-modal-ends"></span>
+          </div>
+        </div>
+        <div class="stream-reason-box" id="stream-modal-reason">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 21.5 20H2.5Z"/><path d="M12 9.5v5M12 17.5h.01"/>
+          </svg>
+          <span id="stream-modal-reason-text"></span>
+        </div>
+        <div class="stream-stat-grid" id="stream-modal-stats"></div>
       </div>
     </div>
 

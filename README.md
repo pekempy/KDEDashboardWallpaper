@@ -22,6 +22,11 @@ dashboard) so the wallpaper itself stays visible.
   its `docker logs` output (long lines wrap with a hanging indent instead of
   bleeding off the edge), plus an "Open Dockhand" shortcut in the widget
   header - see `dockhand.url` in `config.yaml.example`.
+- **Now Playing**: live Jellyfin + Plex sessions, consolidated into one
+  widget - poster with the viewer's avatar badged on the corner, a
+  transcode/direct-play icon, and a progress bar. Click a row for a popout
+  with full stream details (codecs, resolution, bitrate, device, and why a
+  transcode is happening).
 - **Random background**: click the image icon (or hit the API) to pull a new
   wallpaper from rclone; broadcasts live over SSE so the window updates
   without a reload.
@@ -41,7 +46,7 @@ dashboard) so the wallpaper itself stays visible.
 - `config.yaml`: bookmarks, folder shortcuts, UI settings, the home directory
   used as the default working dir for command launches, the rclone
   remote/path for background rotation, and optional service integrations
-  (NZBget, qBittorrent-via-qui, Jellyfin, Immich) - gitignored, see
+  (NZBget, qBittorrent-via-qui, Jellyfin, Plex, Immich) - gitignored, see
   `config.yaml.example` for the shape. Each integration block is optional;
   omit one to disable that widget. `integrations` is stripped before the
   config is sent to the browser - only the server-side proxy endpoints see

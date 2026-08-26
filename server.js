@@ -350,11 +350,14 @@ app.get('/api/media/thumb/:source/:id', async (req, res) => {
     let upstream;
     if (source === 'jellyfin' && jellyfin) {
       upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Primary?maxWidth=200`, { headers: { 'X-Emby-Token': jellyfin.token } });
+    } else if (source === 'jellyfin-user' && jellyfin) {
+      upstream = await fetch(`${jellyfin.url}/Users/${id}/Images/Primary?maxWidth=100`, { headers: { 'X-Emby-Token': jellyfin.token } });
     } else if (source === 'immich' && immich) {
       upstream = await fetch(`${immich.url}/api/assets/${id}/thumbnail`, { headers: { 'x-api-key': immich.api_key } });
     } else {
       return res.status(404).end();
     }
+    if (!upstream.ok) return res.status(404).end();
     res.set('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.send(buf);
@@ -362,6 +365,169 @@ app.get('/api/media/thumb/:source/:id', async (req, res) => {
     console.error('[API] Thumbnail proxy failed:', err.message);
     res.status(502).end();
   }
+});
+
+// Plex images (posters/backdrops) live at server-relative paths (e.g.
+// /library/metadata/123/thumb/456) that need the Plex token appended -
+// proxied here so the token stays server-side, same as the Jellyfin/Immich
+// thumb route above.
+app.get('/api/media/plex-image', async (req, res) => {
+  const { plex } = config.integrations || {};
+  const thumbPath = req.query.path;
+  if (!plex || !thumbPath || !thumbPath.startsWith('/')) return res.status(404).end();
+  try {
+    const upstream = await fetch(`${plex.url}${thumbPath}`, { headers: { 'X-Plex-Token': plex.token } });
+    if (!upstream.ok) return res.status(404).end();
+    res.set('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.send(buf);
+  } catch (err) {
+    console.error('[API] Plex image proxy failed:', err.message);
+    res.status(502).end();
+  }
+});
+
+// Live "now playing" sessions - Jellyfin + Plex, normalized into one shape
+// so the frontend widget doesn't need to know which backend a stream came
+// from. Each item carries enough for both the compact row (user, title,
+// transcode flag, progress) and the stream-details popout (codecs,
+// resolution, bitrate, why a transcode is happening).
+async function fetchJellyfinNowPlaying(jellyfin) {
+  try {
+    const r = await fetch(`${jellyfin.url}/Sessions`, { headers: { 'X-Emby-Token': jellyfin.token } });
+    const sessions = await r.json();
+    return (sessions || []).filter(s => s.NowPlayingItem).map(s => {
+      const item = s.NowPlayingItem;
+      const playState = s.PlayState || {};
+      const tc = s.TranscodingInfo;
+      // Episodes use their parent show's poster, matching the Recently Added grid
+      const posterId = item.Type === 'Episode' ? (item.SeriesId || item.Id) : item.Id;
+      const progressPercent = item.RunTimeTicks
+        ? Math.round(((playState.PositionTicks || 0) / item.RunTimeTicks) * 100) : 0;
+      // Ticks are 100ns units - /10000 gives ms. Start/end are estimates from
+      // current position, not a real recorded playback-start event.
+      const positionMs = (playState.PositionTicks || 0) / 10000;
+      const totalMs = item.RunTimeTicks ? item.RunTimeTicks / 10000 : null;
+      const now = Date.now();
+      const startedAt = new Date(now - positionMs).toISOString();
+      const endsAt = (!playState.IsPaused && totalMs != null) ? new Date(now + (totalMs - positionMs)).toISOString() : null;
+      const subtitle = item.Type === 'Episode'
+        ? [item.ParentIndexNumber != null && item.IndexNumber != null ? `S${item.ParentIndexNumber}E${item.IndexNumber}` : null, item.SeriesName].filter(Boolean).join(' · ')
+        : (item.ProductionYear ? String(item.ProductionYear) : null);
+      const videoStream = item.MediaStreams?.find(m => m.Type === 'Video');
+      const audioStream = item.MediaStreams?.find(m => m.Type === 'Audio');
+      return {
+        source: 'jellyfin',
+        sessionId: s.Id,
+        user: { name: s.UserName || 'Unknown', avatarUrl: s.UserId ? `/api/media/thumb/jellyfin-user/${s.UserId}` : null },
+        title: item.Name,
+        subtitle,
+        type: item.Type,
+        posterUrl: posterId ? `/api/media/thumb/jellyfin/${posterId}` : null,
+        progressPercent,
+        startedAt,
+        endsAt,
+        state: playState.IsPaused ? 'paused' : 'playing',
+        transcoding: playState.PlayMethod === 'Transcode',
+        playMethod: playState.PlayMethod === 'Transcode' ? 'Transcode'
+          : playState.PlayMethod === 'DirectStream' ? 'Direct Stream' : 'Direct Play',
+        device: s.DeviceName,
+        client: s.Client,
+        quality: {
+          resolution: tc ? `${tc.Width || '?'}x${tc.Height || '?'}` : (videoStream ? `${videoStream.Width}x${videoStream.Height}` : null),
+          videoCodec: (tc?.VideoCodec || videoStream?.Codec || '').toUpperCase() || null,
+          audioCodec: (tc?.AudioCodec || audioStream?.Codec || '').toUpperCase() || null,
+          bitrate: tc?.Bitrate ? Math.round(tc.Bitrate / 1000)
+            : (item.MediaSources?.[0]?.Bitrate ? Math.round(item.MediaSources[0].Bitrate / 1000)
+            : (Math.round(((videoStream?.BitRate || 0) + (audioStream?.BitRate || 0)) / 1000) || null)),
+          // Direct-play sessions report Item.Container as a comma-separated list of
+          // compatible extensions (e.g. "mov,mp4,m4a") rather than the actual file's
+          // container - only the first entry reflects what's actually playing.
+          container: (tc?.Container || item.Container || '').split(',')[0].toUpperCase() || null,
+        },
+        details: {
+          videoDecision: tc ? (tc.IsVideoDirect ? 'Direct' : 'Transcode') : 'Direct',
+          audioDecision: tc ? (tc.IsAudioDirect ? 'Direct' : 'Transcode') : 'Direct',
+          reasons: tc?.TranscodeReasons || [],
+        },
+      };
+    });
+  } catch (err) {
+    console.error('[API] Jellyfin sessions fetch failed:', err.message);
+    return [];
+  }
+}
+
+async function fetchPlexNowPlaying(plex) {
+  try {
+    const r = await fetch(`${plex.url}/status/sessions`, { headers: { 'X-Plex-Token': plex.token, Accept: 'application/json' } });
+    const data = await r.json();
+    const items = data.MediaContainer?.Metadata || [];
+    return items.map(item => {
+      const media = item.Media?.[0];
+      const part = media?.Part?.[0];
+      const ts = item.TranscodeSession;
+      const isEpisode = item.type === 'episode';
+      const subtitle = isEpisode
+        ? [item.parentIndex != null && item.index != null ? `S${item.parentIndex}E${item.index}` : null, item.grandparentTitle].filter(Boolean).join(' · ')
+        : (item.year ? String(item.year) : null);
+      // Episodes use their parent show's poster, matching the Recently Added grid
+      const thumbPath = isEpisode ? (item.grandparentThumb || item.thumb) : item.thumb;
+      const progressPercent = item.duration ? Math.round(((item.viewOffset || 0) / item.duration) * 100) : 0;
+      const videoTranscoding = ts ? ts.videoDecision === 'transcode' : part?.decision === 'transcode';
+      const audioTranscoding = ts ? ts.audioDecision === 'transcode' : false;
+      // viewOffset/duration are already ms - start/end are estimates from
+      // current position, not a real recorded playback-start event.
+      const isPaused = item.Player?.state === 'paused';
+      const viewOffset = item.viewOffset || 0;
+      const now = Date.now();
+      const startedAt = new Date(now - viewOffset).toISOString();
+      const endsAt = (!isPaused && item.duration) ? new Date(now + (item.duration - viewOffset)).toISOString() : null;
+      return {
+        source: 'plex',
+        sessionId: item.sessionKey,
+        user: { name: item.User?.title || 'Unknown', avatarUrl: item.User?.thumb || null },
+        title: item.title,
+        subtitle,
+        type: item.type,
+        posterUrl: thumbPath ? `/api/media/plex-image?path=${encodeURIComponent(thumbPath)}` : null,
+        progressPercent,
+        startedAt,
+        endsAt,
+        state: isPaused ? 'paused' : 'playing',
+        transcoding: !!(videoTranscoding || audioTranscoding),
+        playMethod: ts ? 'Transcode' : (part?.decision === 'copy' ? 'Direct Stream' : 'Direct Play'),
+        device: item.Player?.title,
+        client: item.Player?.product,
+        quality: {
+          resolution: media?.videoResolution ? (/^\d+$/.test(media.videoResolution) ? `${media.videoResolution}p` : media.videoResolution.toUpperCase()) : null,
+          videoCodec: media?.videoCodec ? media.videoCodec.toUpperCase() : null,
+          audioCodec: media?.audioCodec ? media.audioCodec.toUpperCase() : null,
+          bitrate: ts?.bitrate || media?.bitrate || null,
+          container: media?.container ? media.container.toUpperCase() : null,
+        },
+        details: {
+          videoDecision: videoTranscoding ? 'Transcode' : 'Direct',
+          audioDecision: audioTranscoding ? 'Transcode' : 'Direct',
+          reasons: ts ? [
+            ts.videoDecision === 'transcode' ? `Video: ${ts.sourceVideoCodec || '?'} → ${ts.videoCodec || '?'}` : null,
+            ts.audioDecision === 'transcode' ? `Audio: ${ts.sourceAudioCodec || '?'} → ${ts.audioCodec || '?'}` : null,
+          ].filter(Boolean) : [],
+        },
+      };
+    });
+  } catch (err) {
+    console.error('[API] Plex sessions fetch failed:', err.message);
+    return [];
+  }
+}
+
+app.get('/api/media/nowplaying', async (req, res) => {
+  const { jellyfin, plex } = config.integrations || {};
+  const results = [];
+  if (jellyfin) results.push(...await fetchJellyfinNowPlaying(jellyfin));
+  if (plex) results.push(...await fetchPlexNowPlaying(plex));
+  res.json(results);
 });
 
 // System Monitor Info

@@ -17,9 +17,13 @@ display:
   wallpaper_monitor: 2
   # Assign widgets to specific monitors (1-based index from the order list)
   widgets:
-    system_stats: [1, 3]
+    vitals: [1, 3]
     downloads: [2]
+    container_health: [2]
     media_recent: [1]
+    now_playing: [2]
+    bookmarks: [1, 3]
+    folders: [1, 3]
 # Optional service widgets. Omit or leave a block out entirely to disable it -
 # each one is only queried if present.
 integrations:
@@ -33,6 +37,10 @@ integrations:
     instance_id: 1
   jellyfin:
     url: http://localhost:8096
+    public_url: ''
+    token: ''
+  plex:
+    url: http://localhost:32400
     public_url: ''
     token: ''
   immich:

@@ -5,6 +5,10 @@ class DashboardApp {
     this.dockerContainers = [];
     this.recentMediaItems = [];
     this.lastRecentIds = new Set();
+    this.nowPlayingItems = [];
+    this.healthItems = [];
+    this.downloadItems = [];
+    this.collapsedWidgets = new Set(this.loadCollapsedWidgets());
     this.activeDownloadsCount = 0;
     this.searchQuery = '';
     this.searchFlatResults = [];
@@ -24,6 +28,35 @@ class DashboardApp {
   shouldShowWidget(widgetName) {
     if (!this.displayConfig || !this.displayConfig.widgets || !this.displayConfig.widgets[widgetName]) return false;
     return this.displayConfig.widgets[widgetName].includes(this.screenId);
+  }
+
+  loadCollapsedWidgets() {
+    try { return JSON.parse(localStorage.getItem('collapsedWidgets') || '[]'); } catch { return []; }
+  }
+
+  // Collapsible auto-hide widgets (Now Playing, Container Health, Downloads) -
+  // collapsing one frees up column height for Recently Added, which resizes
+  // itself on every fetch tick anyway, so just poke it after toggling.
+  toggleWidgetCollapse(key) {
+    if (this.collapsedWidgets.has(key)) this.collapsedWidgets.delete(key);
+    else this.collapsedWidgets.add(key);
+    localStorage.setItem('collapsedWidgets', JSON.stringify([...this.collapsedWidgets]));
+
+    const targets = {
+      nowplaying: ['widget-nowplaying', 'nowplaying-count', () => this.nowPlayingItems.length],
+      health: ['widget-health', 'health-count', () => this.healthItems.length],
+      downloads: ['widget-downloads', 'downloads-count', () => this.downloadItems.length],
+    };
+    const [widgetElId, countElId, count] = targets[key] || [];
+    if (widgetElId) this.applyCollapseState(key, widgetElId, countElId, count());
+    this.renderRecentGrid();
+  }
+
+  applyCollapseState(key, widgetElId, countElId, count) {
+    const collapsed = this.collapsedWidgets.has(key);
+    document.getElementById(widgetElId)?.classList.toggle('is-collapsed', collapsed);
+    const countEl = document.getElementById(countElId);
+    if (countEl) countEl.textContent = collapsed ? ` (${count})` : '';
   }
 
   async init() {
@@ -50,22 +83,33 @@ class DashboardApp {
       this.fetchDownloads();
       this.fetchContainerHealth();
       this.fetchRecentMedia();
+      this.fetchNowPlaying();
       this.setupSSE();
 
       const bgLayer = document.getElementById('bg-layer');
       bgLayer.style.backgroundImage = `url('/background.jpg?t=${Date.now()}')`;
-      
-      // Position background to span across monitors
-      // Screen 1: Left, Screen 2: Center, Screen 3: Right
-      const positions = ['0% 50%', '50% 50%', '100% 50%'];
-      bgLayer.style.setProperty('background-position', positions[this.screenId - 1] || 'center', 'important');
-      bgLayer.style.setProperty('background-size', '300% 100%', 'important');
+
+      // Multi-monitor: the wallpaper is one wide triple-panel image, and each
+      // screen's window shows just its own slice of it, spread evenly across
+      // screenId 1..monitorCount. Single monitor: no slicing needed - fall
+      // back to the CSS default (background-size: cover; position: center),
+      // which shows the actual center of the image instead of a slice of it.
+      const monitorCount = this.displayConfig?.order?.length || 1;
+      if (monitorCount > 1) {
+        const pct = ((this.screenId - 1) / (monitorCount - 1)) * 100;
+        bgLayer.style.setProperty('background-position', `${pct}% 50%`, 'important');
+        bgLayer.style.setProperty('background-size', `${monitorCount * 100}% 100%`, 'important');
+      } else {
+        bgLayer.style.removeProperty('background-position');
+        bgLayer.style.removeProperty('background-size');
+      }
 
       setInterval(() => this.fetchSystemStats(), 5000);
       setInterval(() => this.fetchDockerContainers(), 15000);
       setInterval(() => this.fetchDownloads(), 5000);
       setInterval(() => this.fetchContainerHealth(), 5000);
       setInterval(() => this.fetchRecentMedia(), 60000);
+      setInterval(() => this.fetchNowPlaying(), 5000);
 
       lucide.createIcons();
       console.log('[Init] Finished');
@@ -105,6 +149,17 @@ class DashboardApp {
   bindEvents() {
     document.getElementById('btn-wallpaper').onclick = () => this.randomizeWallpaper();
     document.getElementById('btn-edit-mode').onclick = () => this.toggleEditMode();
+
+    // Click-away-to-close for every modal - only when the click lands on the
+    // overlay itself, not something inside the card.
+    const modalClosers = { 'edit-modal': 'closeModal', 'logs-modal': 'closeLogsModal', 'stream-modal': 'closeStreamModal' };
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target !== overlay) return;
+        const closer = modalClosers[overlay.id];
+        if (closer) this[closer]();
+      });
+    });
 
     const searchInput = document.getElementById('global-search');
     searchInput.oninput = (e) => {
@@ -180,6 +235,7 @@ class DashboardApp {
       const res = await fetch('/api/downloads/active');
       const items = await res.json();
       this.activeDownloadsCount = items.length;
+      this.downloadItems = items;
       if (!items.length) { widget.style.display = 'none'; this.renderRecentGrid(); return; }
       widget.style.display = this.shouldShowWidget('downloads') ? '' : 'none';
       el.innerHTML = items.map(d => `
@@ -189,10 +245,12 @@ class DashboardApp {
           <div class="vital-val" style="width: 28px; font-size: 10.5px;">${d.progress}%</div>
         </div>
       `).join('');
+      this.applyCollapseState('downloads', 'widget-downloads', 'downloads-count', items.length);
       this.renderRecentGrid();
     } catch (err) {
       widget.style.display = 'none';
       this.activeDownloadsCount = 0;
+      this.downloadItems = [];
       this.renderRecentGrid();
     }
   }
@@ -203,6 +261,7 @@ class DashboardApp {
     try {
       const res = await fetch('/api/docker/unhealthy');
       const items = await res.json();
+      this.healthItems = items;
       if (!items.length) { widget.style.display = 'none'; this.renderRecentGrid(); return; }
       widget.style.display = this.shouldShowWidget('container_health') ? '' : 'none';
       el.innerHTML = items.map(c => `
@@ -219,9 +278,11 @@ class DashboardApp {
         btn.onclick = () => this.openLogsModal(btn.dataset.logsName);
       });
       lucide.createIcons();
+      this.applyCollapseState('health', 'widget-health', 'health-count', items.length);
       this.renderRecentGrid();
     } catch (err) {
       widget.style.display = 'none';
+      this.healthItems = [];
       this.renderRecentGrid();
     }
   }
@@ -291,19 +352,23 @@ class DashboardApp {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
   }
 
-  computeRecentCapacity() {
+  // How many Recently Added tiles fit, and how tall each one gets. Now
+  // Playing/Downloads/Container Health can each grow tall (more active
+  // viewers/downloads/unhealthy containers = a taller sibling), so this
+  // prefers shrinking the tile height to keep more items visible over just
+  // dropping to fewer full-size rows - and only drops rows once tiles would
+  // shrink past a legible floor.
+  computeRecentLayout() {
     const column = document.querySelector('.widget-column-right');
-    const dlWidget = document.getElementById('widget-downloads');
-    const healthWidget = document.getElementById('widget-health');
+    const siblingIds = ['widget-nowplaying', 'widget-downloads', 'widget-health'];
     const recentWidget = document.getElementById('widget-recent');
     const header = recentWidget.querySelector('.widget-header');
     const grid = document.getElementById('recent-grid');
-    if (!column || !grid) return 9;
+    if (!column || !grid) return { maxItems: 9, rowHeight: null };
 
-    const visibleSiblingHeight = dlWidget.offsetHeight + healthWidget.offsetHeight;
-    const visibleSiblingCount = (dlWidget.offsetHeight > 0 ? 1 : 0) + (healthWidget.offsetHeight > 0 ? 1 : 0);
-    const columnGap = 14; 
-    const consumedBySiblings = visibleSiblingHeight + visibleSiblingCount * columnGap;
+    const columnGap = 14;
+    const siblings = siblingIds.map(id => document.getElementById(id)).filter(w => w && w.offsetHeight > 0);
+    const consumedBySiblings = siblings.reduce((sum, w) => sum + w.offsetHeight + columnGap, 0);
 
     const widgetStyle = getComputedStyle(recentWidget);
     const chrome = header.offsetHeight
@@ -312,31 +377,38 @@ class DashboardApp {
 
     const availableForGrid = column.clientHeight - consumedBySiblings - chrome;
 
-    const gridGap = 8; 
+    const gridGap = 8;
     const colWidth = (grid.clientWidth - gridGap * 2) / 3;
-    const rowHeight = colWidth * 1.5; 
-    if (rowHeight <= 0) return 9;
+    if (colWidth <= 0) return { maxItems: 9, rowHeight: null };
+    const naturalRowHeight = colWidth * 1.5;
+    const minRowHeight = colWidth * 0.9;
 
-    const rows = Math.floor((availableForGrid + gridGap) / (rowHeight + gridGap));
-    return Math.min(18, Math.max(3, rows * 3));
+    const fitsAtRows = (n) => (availableForGrid - (n - 1) * gridGap) / n;
+    let rows = Math.max(1, Math.min(6, Math.floor((availableForGrid + gridGap) / (naturalRowHeight + gridGap))));
+    while (rows > 1 && fitsAtRows(rows) < minRowHeight) rows--;
+    const rowHeight = Math.min(naturalRowHeight, Math.max(minRowHeight, fitsAtRows(rows)));
+
+    return { maxItems: rows * 3, rowHeight };
   }
 
   renderRecentGrid() {
     const el = document.getElementById('recent-grid');
     const items = this.recentMediaItems || [];
-    const maxItems = this.computeRecentCapacity();
+    const { maxItems, rowHeight } = this.computeRecentLayout();
     const shown = items.slice(0, maxItems);
 
-    const shownKey = shown.map(m => m.id).join(',');
+    const shownKey = `${shown.map(m => m.id).join(',')}|${Math.round(rowHeight || 0)}`;
     if (shownKey === this.lastRenderedShownKey) return;
     this.lastRenderedShownKey = shownKey;
 
     const previouslySeen = this.lastRecentIds || new Set();
+    const heightStyle = rowHeight ? `height:${Math.round(rowHeight)}px;` : '';
 
     el.innerHTML = shown.map((m, idx) => {
       const isNew = !previouslySeen.has(m.id);
+      const style = `${heightStyle}${isNew ? `animation-delay: ${idx * 45}ms;` : ''}`;
       return `
-      <div class="recent-item source-${m.source}${isNew ? ' is-new' : ''}" ${isNew ? `style="animation-delay: ${idx * 45}ms"` : ''} title="${m.title}" data-idx="${idx}">
+      <div class="recent-item source-${m.source}${isNew ? ' is-new' : ''}" style="${style}" title="${m.title}" data-idx="${idx}">
         <img src="${m.thumbUrl}" alt="" loading="lazy">
         ${m.episodeCode ? `<span class="recent-episode-badge">${m.episodeCode}</span>` : ''}
         <span class="recent-type-badge">${this.recentTypeIcon(m.type)}</span>
@@ -350,6 +422,99 @@ class DashboardApp {
       const item = items[+node.dataset.idx];
       node.onclick = () => this.openExternal(item.linkUrl);
     });
+  }
+
+  async fetchNowPlaying() {
+    const widget = document.getElementById('widget-nowplaying');
+    const el = document.getElementById('nowplaying-list');
+    try {
+      const res = await fetch('/api/media/nowplaying');
+      const items = await res.json();
+      this.nowPlayingItems = items;
+      if (!items.length) { widget.style.display = 'none'; this.renderRecentGrid(); return; }
+      widget.style.display = this.shouldShowWidget('now_playing') ? '' : 'none';
+
+      el.innerHTML = items.map((s, idx) => `
+        <div class="nowplaying-item${s.transcoding ? ' is-transcode' : ''}" data-idx="${idx}" title="${s.title}${s.subtitle ? ' · ' + s.subtitle : ''}">
+          <div class="np-poster-wrap">
+            ${s.posterUrl ? `<img class="np-poster" src="${s.posterUrl}" alt="" loading="lazy">` : `<div class="np-poster np-poster-empty"></div>`}
+            ${s.user.avatarUrl ? `<img class="np-avatar" src="${s.user.avatarUrl}" alt="">` : `<div class="np-avatar np-avatar-empty">${(s.user.name || '?').charAt(0).toUpperCase()}</div>`}
+          </div>
+          <div class="np-info">
+            <div class="np-title">${s.user.name}</div>
+            <div class="np-subtitle">${s.title}${s.subtitle ? ' · ' + s.subtitle : ''}</div>
+            <div class="progress-track np-progress"><div class="progress-fill" style="width: ${s.progressPercent}%;"></div></div>
+          </div>
+          <span class="np-badge ${s.transcoding ? 'is-transcode' : 'is-direct'}" title="${s.transcoding ? 'Transcoding' : 'Direct Play'}">
+            <i data-lucide="${s.transcoding ? 'cpu' : 'zap'}"></i>
+          </span>
+        </div>
+      `).join('');
+
+      el.querySelectorAll('.nowplaying-item').forEach(node => {
+        node.onclick = () => this.openStreamModal(items[+node.dataset.idx]);
+      });
+      lucide.createIcons();
+      this.applyCollapseState('nowplaying', 'widget-nowplaying', 'nowplaying-count', items.length);
+      this.renderRecentGrid();
+    } catch (err) {
+      widget.style.display = 'none';
+      this.nowPlayingItems = [];
+      this.renderRecentGrid();
+    }
+  }
+
+  openStreamModal(s) {
+    const posterEl = document.getElementById('stream-modal-poster');
+    posterEl.src = s.posterUrl || '';
+    posterEl.style.display = s.posterUrl ? '' : 'none';
+    const avatarEl = document.getElementById('stream-modal-avatar');
+    avatarEl.src = s.user.avatarUrl || '';
+    avatarEl.style.display = s.user.avatarUrl ? '' : 'none';
+
+    document.getElementById('stream-modal-title').innerText = s.title;
+    document.getElementById('stream-modal-subtitle').innerText = [s.subtitle, s.user.name].filter(Boolean).join(' · ');
+
+    document.getElementById('stream-modal-progress-fill').style.width = `${s.progressPercent}%`;
+    const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+    document.getElementById('stream-modal-started').innerText = s.startedAt ? `Started ${fmtTime(s.startedAt)}` : '';
+    document.getElementById('stream-modal-percent').innerText = `${s.progressPercent}%`;
+    document.getElementById('stream-modal-ends').innerText = s.state === 'paused'
+      ? 'Paused' : (s.endsAt ? `Ends ~${fmtTime(s.endsAt)}` : '');
+
+    const reasonBox = document.getElementById('stream-modal-reason');
+    if (s.transcoding && s.details.reasons?.length) {
+      document.getElementById('stream-modal-reason-text').innerText = s.details.reasons.join(' · ');
+      reasonBox.style.display = '';
+    } else {
+      reasonBox.style.display = 'none';
+    }
+
+    const stats = [
+      ['Source', s.source === 'jellyfin' ? 'Jellyfin' : 'Plex'],
+      ['Status', s.state === 'paused' ? 'Paused' : 'Playing'],
+      ['Play Method', s.playMethod],
+      ['Resolution', s.quality.resolution || '—'],
+      ['Device', [s.client, s.device].filter(Boolean).join(' · ') || '—', true],
+      ['Video', [s.details.videoDecision, s.quality.videoCodec].filter(Boolean).join(' · ')],
+      ['Audio', [s.details.audioDecision, s.quality.audioCodec].filter(Boolean).join(' · ')],
+      ['Container', s.quality.container || '—'],
+      ['Bitrate', s.quality.bitrate ? `${s.quality.bitrate} kbps` : '—'],
+    ];
+
+    const escapeHtml = (str) => String(str).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    document.getElementById('stream-modal-stats').innerHTML = stats.map(([label, value, wide]) => `
+      <div class="stream-stat${wide ? ' stream-stat-wide' : ''}">
+        <div class="stream-stat-label">${escapeHtml(label)}</div>
+        <div class="stream-stat-value">${escapeHtml(value)}</div>
+      </div>
+    `).join('');
+
+    document.getElementById('stream-modal').classList.add('open');
+  }
+
+  closeStreamModal() {
+    document.getElementById('stream-modal').classList.remove('open');
   }
 
   renderDiskTree(disks) {
@@ -441,6 +606,7 @@ class DashboardApp {
         'widget-downloads': 'downloads', 
         'widget-health': 'container_health', 
         'widget-recent': 'media_recent',
+        'widget-nowplaying': 'now_playing',
         'widget-vitals': 'vitals',
         'widget-bookmarks': 'bookmarks',
         'widget-folders': 'folders'
