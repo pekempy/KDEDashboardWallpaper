@@ -1,6 +1,9 @@
 # User config file (contains personal paths, bookmarks, etc.)
 config.yaml
 
+# Public API token
+.env
+
 # Auto-discovered/unused container listing (personal infra, not read by server.js)
 docker.yaml
 

@@ -74,3 +74,43 @@ glados-dashboard.service` (picks up server.js changes) *and* re-running
 `start-wallpaper.sh` (relaunches the Chrome window so it actually reloads
 the new HTML/CSS/JS - a running Chrome window doesn't pick up file changes
 on its own) are needed to see the result.
+
+## Public API
+
+Everything this dashboard knows - system stats, now-playing, recently added
+media (with poster/thumbnail URLs), active downloads, docker container
+health - as one JSON blob at `GET /api/public/dashboard`, meant for an
+external client (a phone-widget build of this same dashboard, say) to pull
+over the internet and pick whatever fields it needs out of. One endpoint,
+everything in it - filter client-side rather than asking for narrower ones.
+
+**Off by default.** Copy `.env.example` to `.env` and set `PUBLIC_API_TOKEN`
+(`openssl rand -hex 32` is a good way to generate one) - with it unset, the
+entire `/api/public/*` namespace 404s as if it doesn't exist. `.env` is
+gitignored; `server.js` loads it itself on startup (Node's
+`process.loadEnvFile`, no extra dependency), so a `systemctl --user restart
+glados-dashboard.service` after editing it is enough to pick it up.
+
+Send the token either as `Authorization: Bearer <token>` or `?token=<token>`
+on every request under `/api/public/`. Wrong or missing token → 401; no
+token configured at all → 404.
+
+Poster/thumbnail URLs in the response (`thumbUrl`, `posterUrl`,
+`user.avatarUrl`) are relative paths already rewritten to their
+`/api/public/media/...` mirror (same auth as everything else under
+`/api/public/`) - resolve them against whatever host you're reverse-proxying
+this through, e.g. `https://dashboard.example.com` + `/api/public/media/thumb/jellyfin/abc123`.
+
+**Only read-only, stats-shaped routes live under `/api/public/`.** The
+command/URL-launch, config-write, and docker-logs endpoints stay
+local-network-only regardless of this token - don't add them to this
+namespace.
+
+**Exposing it externally (Caddy):** point a Caddy site block's
+`reverse_proxy` at *only* the `/api/public/*` path on this host (not the
+whole app - everything else here has no auth) - and since this runs on the
+host, not in a container, Caddy needs `extra_hosts:
+["host.docker.internal:host-gateway"]` on its own compose service to reach
+it. See `config.yaml`'s `server.host: 0.0.0.0` - the app already listens on
+all interfaces, so this is purely a Caddy/network-reachability step, not an
+app change.

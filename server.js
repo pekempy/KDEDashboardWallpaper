@@ -6,11 +6,16 @@ import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
 import { exec, execFile } from 'child_process';
 import si from 'systeminformation';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 process.env.TERM = process.env.TERM || 'xterm-256color';
+
+// .env holds PUBLIC_API_TOKEN (see README "Public API") - optional, so a
+// fresh clone with no .env just runs without that feature.
+try { process.loadEnvFile(path.join(__dirname, '.env')); } catch {}
 
 const app = express();
 app.use(cors());
@@ -179,35 +184,45 @@ app.post('/api/layout/reorder', (req, res) => {
 });
 
 // Docker containers (for search) - queried live, nothing persisted
-app.get('/api/docker/containers', (req, res) => {
-  exec(`docker ps --format '{{json .}}'`, (error, stdout) => {
-    if (error) {
-      console.error('[API] docker ps failed:', error.message);
-      return res.json([]);
-    }
-    const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
-      try { return JSON.parse(line); } catch { return null; }
-    }).filter(Boolean).map(c => {
-      const portMatch = (c.Ports || '').match(/(?:0\.0\.0\.0|127\.0\.0\.1|\[::\]):(\d+)->/);
-      return { name: c.Names, port: portMatch ? Number(portMatch[1]) : null };
-    }).filter(c => c.port); // only containers with a browsable published port
-    res.json(containers);
+function getDockerContainers() {
+  return new Promise((resolve) => {
+    exec(`docker ps --format '{{json .}}'`, (error, stdout) => {
+      if (error) {
+        console.error('[API] docker ps failed:', error.message);
+        return resolve([]);
+      }
+      const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean).map(c => {
+        const portMatch = (c.Ports || '').match(/(?:0\.0\.0\.0|127\.0\.0\.1|\[::\]):(\d+)->/);
+        return { name: c.Names, port: portMatch ? Number(portMatch[1]) : null };
+      }).filter(c => c.port); // only containers with a browsable published port
+      resolve(containers);
+    });
   });
+}
+app.get('/api/docker/containers', async (req, res) => {
+  res.json(await getDockerContainers());
 });
 
 // Container health - unhealthy/restarting only, for the right-column widget
-app.get('/api/docker/unhealthy', (req, res) => {
-  exec(`docker ps -a --format '{{json .}}'`, (error, stdout) => {
-    if (error) {
-      console.error('[API] docker ps -a failed:', error.message);
-      return res.json([]);
-    }
-    const flagged = stdout.trim().split('\n').filter(Boolean).map(line => {
-      try { return JSON.parse(line); } catch { return null; }
-    }).filter(Boolean).filter(c => /unhealthy|restarting/i.test(c.Status || ''))
-      .map(c => ({ name: c.Names, status: c.Status }));
-    res.json(flagged);
+function getUnhealthyContainers() {
+  return new Promise((resolve) => {
+    exec(`docker ps -a --format '{{json .}}'`, (error, stdout) => {
+      if (error) {
+        console.error('[API] docker ps -a failed:', error.message);
+        return resolve([]);
+      }
+      const flagged = stdout.trim().split('\n').filter(Boolean).map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean).filter(c => /unhealthy|restarting/i.test(c.Status || ''))
+        .map(c => ({ name: c.Names, status: c.Status }));
+      resolve(flagged);
+    });
   });
+}
+app.get('/api/docker/unhealthy', async (req, res) => {
+  res.json(await getUnhealthyContainers());
 });
 
 // Docker prints --timestamps as full RFC3339Nano (2026-08-21T07:08:47.587360692Z) -
@@ -230,16 +245,17 @@ app.get('/api/docker/logs/:name', (req, res) => {
 });
 
 // Active downloads - merges NZBget (usenet) and qBittorrent-via-qui (torrents)
-app.get('/api/downloads/active', async (req, res) => {
+async function getDownloadsActive() {
   const results = [];
   const { nzbget, qui } = config.integrations || {};
 
   if (nzbget) {
     try {
-      const url = `http://${nzbget.username}:${nzbget.password}@${nzbget.url.replace(/^https?:\/\//, '')}`;
-      const r = await fetch(url, {
+      // Basic auth via header - Node's fetch rejects credentials in the URL.
+      const auth = Buffer.from(`${nzbget.username}:${nzbget.password}`).toString('base64');
+      const r = await fetch(nzbget.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
         body: JSON.stringify({ method: 'listgroups', params: [] }),
       });
       const data = await r.json();
@@ -272,11 +288,15 @@ app.get('/api/downloads/active', async (req, res) => {
     }
   }
 
-  res.json(results);
+  return results;
+}
+
+app.get('/api/downloads/active', async (req, res) => {
+  res.json(await getDownloadsActive());
 });
 
 // Recently added media - Jellyfin + Immich, normalized
-app.get('/api/media/recent', async (req, res) => {
+async function getMediaRecent() {
   const results = [];
   const { jellyfin, immich } = config.integrations || {};
 
@@ -339,48 +359,60 @@ app.get('/api/media/recent', async (req, res) => {
   // real-world-chronological feed.
   results.sort((a, b) => new Date(b.addedAt || 0) - new Date(a.addedAt || 0));
 
-  res.json(results);
+  return results;
+}
+
+app.get('/api/media/recent', async (req, res) => {
+  res.json(await getMediaRecent());
 });
+
+// Shared by both the internal (/api/media/*) and public (/api/public/media/*)
+// routes below, so the fetch-and-buffer logic only lives in one place.
+async function fetchThumbnailBuffer(source, id) {
+  const { jellyfin, immich } = config.integrations || {};
+  let upstream;
+  if (source === 'jellyfin' && jellyfin) {
+    upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Primary?maxWidth=200`, { headers: { 'X-Emby-Token': jellyfin.token } });
+  } else if (source === 'jellyfin-user' && jellyfin) {
+    upstream = await fetch(`${jellyfin.url}/Users/${id}/Images/Primary?maxWidth=100`, { headers: { 'X-Emby-Token': jellyfin.token } });
+  } else if (source === 'immich' && immich) {
+    upstream = await fetch(`${immich.url}/api/assets/${id}/thumbnail`, { headers: { 'x-api-key': immich.api_key } });
+  } else {
+    return null;
+  }
+  if (!upstream.ok) return null;
+  return { contentType: upstream.headers.get('content-type') || 'image/jpeg', buffer: Buffer.from(await upstream.arrayBuffer()) };
+}
+
+// Plex images (posters/backdrops) live at server-relative paths (e.g.
+// /library/metadata/123/thumb/456) that need the Plex token appended.
+async function fetchPlexImageBuffer(thumbPath) {
+  const { plex } = config.integrations || {};
+  if (!plex || !thumbPath || !thumbPath.startsWith('/')) return null;
+  const upstream = await fetch(`${plex.url}${thumbPath}`, { headers: { 'X-Plex-Token': plex.token } });
+  if (!upstream.ok) return null;
+  return { contentType: upstream.headers.get('content-type') || 'image/jpeg', buffer: Buffer.from(await upstream.arrayBuffer()) };
+}
 
 // Thumbnail proxy - keeps Jellyfin/Immich API keys server-side only
 app.get('/api/media/thumb/:source/:id', async (req, res) => {
-  const { source, id } = req.params;
-  const { jellyfin, immich } = config.integrations || {};
   try {
-    let upstream;
-    if (source === 'jellyfin' && jellyfin) {
-      upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Primary?maxWidth=200`, { headers: { 'X-Emby-Token': jellyfin.token } });
-    } else if (source === 'jellyfin-user' && jellyfin) {
-      upstream = await fetch(`${jellyfin.url}/Users/${id}/Images/Primary?maxWidth=100`, { headers: { 'X-Emby-Token': jellyfin.token } });
-    } else if (source === 'immich' && immich) {
-      upstream = await fetch(`${immich.url}/api/assets/${id}/thumbnail`, { headers: { 'x-api-key': immich.api_key } });
-    } else {
-      return res.status(404).end();
-    }
-    if (!upstream.ok) return res.status(404).end();
-    res.set('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.send(buf);
+    const result = await fetchThumbnailBuffer(req.params.source, req.params.id);
+    if (!result) return res.status(404).end();
+    res.set('Content-Type', result.contentType);
+    res.send(result.buffer);
   } catch (err) {
     console.error('[API] Thumbnail proxy failed:', err.message);
     res.status(502).end();
   }
 });
 
-// Plex images (posters/backdrops) live at server-relative paths (e.g.
-// /library/metadata/123/thumb/456) that need the Plex token appended -
-// proxied here so the token stays server-side, same as the Jellyfin/Immich
-// thumb route above.
 app.get('/api/media/plex-image', async (req, res) => {
-  const { plex } = config.integrations || {};
-  const thumbPath = req.query.path;
-  if (!plex || !thumbPath || !thumbPath.startsWith('/')) return res.status(404).end();
   try {
-    const upstream = await fetch(`${plex.url}${thumbPath}`, { headers: { 'X-Plex-Token': plex.token } });
-    if (!upstream.ok) return res.status(404).end();
-    res.set('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.send(buf);
+    const result = await fetchPlexImageBuffer(req.query.path);
+    if (!result) return res.status(404).end();
+    res.set('Content-Type', result.contentType);
+    res.send(result.buffer);
   } catch (err) {
     console.error('[API] Plex image proxy failed:', err.message);
     res.status(502).end();
@@ -522,12 +554,16 @@ async function fetchPlexNowPlaying(plex) {
   }
 }
 
-app.get('/api/media/nowplaying', async (req, res) => {
+async function getNowPlaying() {
   const { jellyfin, plex } = config.integrations || {};
   const results = [];
   if (jellyfin) results.push(...await fetchJellyfinNowPlaying(jellyfin));
   if (plex) results.push(...await fetchPlexNowPlaying(plex));
-  res.json(results);
+  return results;
+}
+
+app.get('/api/media/nowplaying', async (req, res) => {
+  res.json(await getNowPlaying());
 });
 
 // System Monitor Info
@@ -535,32 +571,129 @@ let cachedDisk = null;
 let cachedOsInfo = null;
 let lastHeavyStatsTime = 0;
 
+async function getSystemStats() {
+  const cpuLoad = await si.currentLoad();
+  const memory = await si.mem();
+
+  const now = Date.now();
+  if (now - lastHeavyStatsTime > 60000 || !cachedDisk) {
+    cachedDisk = await si.fsSize();
+    cachedOsInfo = await si.osInfo();
+    lastHeavyStatsTime = now;
+  }
+
+  return {
+    cpu: { load: cpuLoad.currentLoad, cores: cpuLoad.cpus.map(c => c.load) },
+    memory: { total: memory.total, active: memory.active, usedPercent: (memory.active / memory.total) * 100 },
+    disk: cachedDisk.filter(d => d.mount === '/' || d.mount.startsWith('/srv/') || d.mount.startsWith('/mnt/')).map(d => ({
+      fs: d.fs, size: d.size, use: d.use, mount: d.mount,
+    })),
+    os: {
+      platform: cachedOsInfo.platform, distro: cachedOsInfo.distro, release: cachedOsInfo.release,
+      hostname: cachedOsInfo.hostname, uptime: si.time().uptime,
+    },
+  };
+}
+
 app.get('/api/system/stats', async (req, res) => {
   try {
-    const cpuLoad = await si.currentLoad();
-    const memory = await si.mem();
-
-    const now = Date.now();
-    if (now - lastHeavyStatsTime > 60000 || !cachedDisk) {
-      cachedDisk = await si.fsSize();
-      cachedOsInfo = await si.osInfo();
-      lastHeavyStatsTime = now;
-    }
-
-    res.json({
-      cpu: { load: cpuLoad.currentLoad, cores: cpuLoad.cpus.map(c => c.load) },
-      memory: { total: memory.total, active: memory.active, usedPercent: (memory.active / memory.total) * 100 },
-      disk: cachedDisk.filter(d => d.mount === '/' || d.mount.startsWith('/srv/') || d.mount.startsWith('/mnt/')).map(d => ({
-        fs: d.fs, size: d.size, use: d.use, mount: d.mount,
-      })),
-      os: {
-        platform: cachedOsInfo.platform, distro: cachedOsInfo.distro, release: cachedOsInfo.release,
-        hostname: cachedOsInfo.hostname, uptime: si.time().uptime,
-      },
-    });
+    res.json(await getSystemStats());
   } catch (err) {
     console.error('System Info fetch failed:', err);
     res.status(500).json({ error: 'Failed to fetch system information' });
+  }
+});
+
+// ----------------------------------------------------------------------
+// Public API - everything this dashboard knows, as one JSON blob, for an
+// external client (e.g. a phone-widget build of this same dashboard) to
+// pull over the internet and pick whatever fields it wants out of. Gated
+// entirely behind PUBLIC_API_TOKEN (see .env.example) - unset means this
+// whole namespace 404s, so a fresh clone has it off by default. Never put
+// the command/URL-launch or config-writing routes behind this: those are
+// remote-control endpoints, not read-only stats, and must stay local-only.
+// ----------------------------------------------------------------------
+function timingSafeStringEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function requirePublicApiToken(req, res, next) {
+  const configured = process.env.PUBLIC_API_TOKEN;
+  if (!configured) return res.status(404).end();
+  const header = req.get('authorization') || '';
+  const supplied = header.replace(/^Bearer\s+/i, '') || req.query.token || '';
+  if (!supplied || !timingSafeStringEqual(supplied, configured)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+app.use('/api/public', requirePublicApiToken);
+
+// Every internal-proxy URL these functions hand back (thumbUrl, posterUrl,
+// user.avatarUrl) is rooted at /api/media/... - rewrite to the /api/public/
+// mirror below so an external client never needs the un-authenticated path.
+function rewritePublicMediaUrls(value) {
+  if (Array.isArray(value)) return value.map(rewritePublicMediaUrls);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = rewritePublicMediaUrls(v);
+    return out;
+  }
+  if (typeof value === 'string' && value.startsWith('/api/media/')) {
+    return value.replace('/api/media/', '/api/public/media/');
+  }
+  return value;
+}
+
+app.get('/api/public/dashboard', async (req, res) => {
+  try {
+    const [system, nowPlaying, mediaRecent, downloads, containers, unhealthy] = await Promise.all([
+      getSystemStats(),
+      getNowPlaying(),
+      getMediaRecent(),
+      getDownloadsActive(),
+      getDockerContainers(),
+      getUnhealthyContainers(),
+    ]);
+    res.json(rewritePublicMediaUrls({
+      generatedAt: new Date().toISOString(),
+      system,
+      nowPlaying,
+      mediaRecent,
+      downloads,
+      docker: { containers, unhealthy },
+    }));
+  } catch (err) {
+    console.error('[API] Public dashboard aggregate failed:', err.message);
+    res.status(500).json({ error: 'Failed to build dashboard payload' });
+  }
+});
+
+app.get('/api/public/media/thumb/:source/:id', async (req, res) => {
+  try {
+    const result = await fetchThumbnailBuffer(req.params.source, req.params.id);
+    if (!result) return res.status(404).end();
+    res.set('Content-Type', result.contentType);
+    res.send(result.buffer);
+  } catch (err) {
+    console.error('[API] Public thumbnail proxy failed:', err.message);
+    res.status(502).end();
+  }
+});
+
+app.get('/api/public/media/plex-image', async (req, res) => {
+  try {
+    const result = await fetchPlexImageBuffer(req.query.path);
+    if (!result) return res.status(404).end();
+    res.set('Content-Type', result.contentType);
+    res.send(result.buffer);
+  } catch (err) {
+    console.error('[API] Public plex image proxy failed:', err.message);
+    res.status(502).end();
   }
 });
 
