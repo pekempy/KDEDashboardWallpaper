@@ -303,6 +303,23 @@ function jellyfinAuthHeader(token) {
   return { Authorization: `MediaBrowser Token="${token}"` };
 }
 
+function formatFileSize(bytes) {
+  if (!bytes) return null;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes, i = 0;
+  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+  return `${size.toFixed(i === 0 || size >= 10 ? 0 : 1)} ${units[i]}`;
+}
+
+// RunTimeTicks are 100ns units - /10,000,000 gives whole seconds.
+function formatDuration(runTimeTicks) {
+  if (!runTimeTicks) return null;
+  const totalMinutes = Math.round(runTimeTicks / 10000000 / 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 // Recently added media - Jellyfin + Immich, normalized
 async function getMediaRecent() {
   const results = [];
@@ -311,7 +328,7 @@ async function getMediaRecent() {
   if (jellyfin) {
     try {
       const r = await fetch(
-        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated,Overview,ProductionYear,PremiereDate,Path,MediaStreams`,
+        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated,Overview,ProductionYear,PremiereDate,Path,MediaStreams,MediaSources,RunTimeTicks`,
         { headers: jellyfinAuthHeader(jellyfin.token) }
       );
       const data = await r.json();
@@ -343,6 +360,8 @@ async function getMediaRecent() {
           resolution: videoStream ? `${videoStream.Width}x${videoStream.Height}` : null,
           videoCodec: videoStream?.Codec ? videoStream.Codec.toUpperCase() : null,
           audioCodec: audioStream?.Codec ? audioStream.Codec.toUpperCase() : null,
+          fileSize: formatFileSize(item.MediaSources?.[0]?.Size),
+          duration: formatDuration(item.RunTimeTicks),
           thumbUrl: `/api/media/thumb/jellyfin/${imageId}`,
           backdropUrl: backdropId ? `/api/media/thumb/jellyfin-backdrop/${backdropId}` : null,
           linkUrl: `${jellyfin.public_url || jellyfin.url}/web/index.html#/details?id=${item.Id}&serverId=${item.ServerId}`,

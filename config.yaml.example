@@ -15,6 +15,12 @@ display:
   order: [1, 2, 3]
   # Which monitor in the 'order' list should show the full wallpaper
   wallpaper_monitor: 2
+  # Thickness (px) of a desktop panel/taskbar that renders on top of this
+  # pinned-below window - the browser viewport doesn't know it's there, so
+  # anything positioned in that strip (e.g. the Recently Added hover popup)
+  # would be visually covered even though it's "on-screen" by DOM math.
+  # 0 if there's no panel, or it doesn't overlap this window.
+  taskbar_height: 0
   # Assign widgets to specific monitors (1-based index from the order list)
   widgets:
     vitals: [1, 3]

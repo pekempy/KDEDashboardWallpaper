@@ -486,8 +486,10 @@ class DashboardApp {
       techLabel.innerHTML = '<i data-lucide="film"></i> Media';
       const stats = this.buildRecentHoverStats([
         { label: 'Resolution', value: item.resolution },
+        { label: 'Size', value: item.fileSize },
         { label: 'Video', value: item.videoCodec },
         { label: 'Audio', value: item.audioCodec },
+        { label: 'Duration', value: item.duration, wide: true },
       ]);
       techGrid.innerHTML = stats;
       techSection.hidden = !stats;
@@ -528,9 +530,15 @@ class DashboardApp {
     }
     left = Math.max(margin, Math.min(left, window.innerWidth - popupRect.width - margin));
 
+    // A desktop panel/taskbar can render on top of this pinned-below window
+    // without the browser viewport knowing it's there - innerHeight alone
+    // would let the popup sit "on-screen" by DOM math but actually be
+    // covered by the panel for the bottom taskbar_height px.
+    const taskbarHeight = this.displayConfig?.taskbar_height || 0;
+    const usableBottom = window.innerHeight - taskbarHeight;
     let top = tileRect.top;
-    if (top + popupRect.height > window.innerHeight - margin) {
-      top = window.innerHeight - popupRect.height - margin;
+    if (top + popupRect.height > usableBottom - margin) {
+      top = usableBottom - popupRect.height - margin;
     }
     top = Math.max(margin, top);
 
