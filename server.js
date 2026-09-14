@@ -311,7 +311,7 @@ async function getMediaRecent() {
   if (jellyfin) {
     try {
       const r = await fetch(
-        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated`,
+        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated,Overview,ProductionYear,PremiereDate,Path`,
         { headers: jellyfinAuthHeader(jellyfin.token) }
       );
       const data = await r.json();
@@ -321,6 +321,11 @@ async function getMediaRecent() {
         const imageId = item.Type === 'Episode' ? item.SeriesId : item.Id;
         if (!imageId) return;
         if (item.Type !== 'Episode' && !item.ImageTags?.Primary) return;
+        // Backdrop/fanart for the hover popup: an episode has none of its own
+        // and inherits the series' (ParentBackdropItemId), same fallback
+        // logic as the poster above.
+        const backdropId = item.BackdropImageTags?.length ? item.Id
+          : (item.Type === 'Episode' && item.ParentBackdropItemId) ? item.ParentBackdropItemId : null;
         results.push({
           source: 'jellyfin',
           id: item.Id,
@@ -328,7 +333,13 @@ async function getMediaRecent() {
           type: item.Type, // Movie | Series | Episode
           episodeCode: item.Type === 'Episode' && item.ParentIndexNumber != null && item.IndexNumber != null
             ? `S${item.ParentIndexNumber}E${item.IndexNumber}` : null,
+          seriesName: item.Type === 'Episode' ? item.SeriesName : null,
+          overview: item.Overview || null,
+          year: item.ProductionYear || null,
+          releaseDate: item.PremiereDate || null,
+          path: item.Path || null,
           thumbUrl: `/api/media/thumb/jellyfin/${imageId}`,
+          backdropUrl: backdropId ? `/api/media/thumb/jellyfin-backdrop/${backdropId}` : null,
           linkUrl: `${jellyfin.public_url || jellyfin.url}/web/index.html#/details?id=${item.Id}&serverId=${item.ServerId}`,
           addedAt: item.DateCreated,
         });
@@ -353,6 +364,7 @@ async function getMediaRecent() {
           title: asset.originalFileName,
           type: asset.type === 'VIDEO' ? 'Video' : 'Photo',
           thumbUrl: `/api/media/thumb/immich/${asset.id}`,
+          previewUrl: `/api/media/thumb/immich-preview/${asset.id}`,
           linkUrl: `${immich.public_url || immich.url}/photos/${asset.id}`,
           addedAt: asset.fileCreatedAt || asset.localDateTime,
         });
@@ -383,8 +395,12 @@ async function fetchThumbnailBuffer(source, id) {
     upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Primary?maxWidth=200`, { headers: jellyfinAuthHeader(jellyfin.token) });
   } else if (source === 'jellyfin-user' && jellyfin) {
     upstream = await fetch(`${jellyfin.url}/Users/${id}/Images/Primary?maxWidth=100`, { headers: jellyfinAuthHeader(jellyfin.token) });
+  } else if (source === 'jellyfin-backdrop' && jellyfin) {
+    upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Backdrop/0?maxWidth=1280`, { headers: jellyfinAuthHeader(jellyfin.token) });
   } else if (source === 'immich' && immich) {
     upstream = await fetch(`${immich.url}/api/assets/${id}/thumbnail`, { headers: { 'x-api-key': immich.api_key } });
+  } else if (source === 'immich-preview' && immich) {
+    upstream = await fetch(`${immich.url}/api/assets/${id}/thumbnail?size=preview`, { headers: { 'x-api-key': immich.api_key } });
   } else {
     return null;
   }

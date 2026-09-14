@@ -369,6 +369,49 @@ body {
 .recent-item .recent-type-badge svg { width: 11px; height: 11px; }
 .recent-item.source-immich .recent-type-badge { color: var(--success); }
 
+/* Hover peek popup - fanart + details for a Recently Added tile. Not a
+   modal: no overlay/close button, purely hover-driven (see
+   scheduleRecentHoverPopup/hideRecentHoverPopup in app.js). */
+.recent-hover-popup {
+  position: fixed;
+  z-index: 500;
+  width: 320px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.recent-hover-popup.is-visible { opacity: 1; transform: none; }
+.recent-hover-image {
+  display: block; width: 100%; height: 180px;
+  object-fit: cover; background: rgba(0,0,0,0.3);
+}
+/* Immich photos (and any jellyfin item with no backdrop) keep their own
+   aspect ratio instead of being cropped to the 16:9 fanart shape. */
+.recent-hover-popup.is-portrait .recent-hover-image { height: 260px; object-fit: contain; }
+.recent-hover-body { padding: 12px 14px 14px; }
+.recent-hover-title {
+  font-size: 14px; font-weight: 600; color: var(--text-main);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.recent-hover-subtitle {
+  font-size: 11.5px; color: var(--text-muted); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.recent-hover-overview {
+  font-size: 11px; line-height: 1.45; color: var(--text-muted); margin-top: 8px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
+}
+.recent-hover-path {
+  font-size: 9.5px; font-family: var(--font-mono); color: var(--text-dim);
+  margin-top: 8px; word-break: break-all;
+}
+/* Both set their own `display`, which otherwise beats the UA [hidden] rule -
+   toggling .hidden in JS would silently do nothing without this. */
+.recent-hover-overview[hidden], .recent-hover-path[hidden] { display: none; }
+
 /* Now Playing - Jellyfin + Plex sessions, consolidated. Poster with a
    circular avatar badge in the corner echoes the header's own
    .portrait-frame/.portrait-badge language, so "who's watching" reads at

@@ -16,6 +16,7 @@ class DashboardApp {
     this.isEditMode = false;
     this.sse = null;
     this.editingItem = null; // { type, index }
+    this.recentHoverTimer = null;
 
     this.init();
   }
@@ -421,7 +422,83 @@ class DashboardApp {
     el.querySelectorAll('.recent-item').forEach(node => {
       const item = items[+node.dataset.idx];
       node.onclick = () => this.openExternal(item.linkUrl);
+      node.onmouseenter = () => this.scheduleRecentHoverPopup(item, node);
+      node.onmouseleave = () => this.hideRecentHoverPopup();
     });
+  }
+
+  // Small delay before showing so a fast mouse pass over several tiles
+  // doesn't flash a popup for each one it crosses.
+  scheduleRecentHoverPopup(item, node) {
+    clearTimeout(this.recentHoverTimer);
+    this.recentHoverTimer = setTimeout(() => this.showRecentHoverPopup(item, node), 220);
+  }
+
+  hideRecentHoverPopup() {
+    clearTimeout(this.recentHoverTimer);
+    document.getElementById('recent-hover-popup').classList.remove('is-visible');
+  }
+
+  showRecentHoverPopup(item, node) {
+    const popup = document.getElementById('recent-hover-popup');
+    const img = document.getElementById('recent-hover-image');
+    const titleEl = document.getElementById('recent-hover-title');
+    const subtitleEl = document.getElementById('recent-hover-subtitle');
+    const overviewEl = document.getElementById('recent-hover-overview');
+    const pathEl = document.getElementById('recent-hover-path');
+
+    const isJellyfin = item.source === 'jellyfin';
+    img.src = (isJellyfin ? (item.backdropUrl || item.thumbUrl) : (item.previewUrl || item.thumbUrl));
+    popup.classList.toggle('is-portrait', !isJellyfin || !item.backdropUrl);
+
+    if (isJellyfin) {
+      const dateStr = item.releaseDate
+        ? new Date(item.releaseDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : (item.year || '');
+      if (item.type === 'Episode') {
+        titleEl.textContent = item.seriesName || item.title;
+        subtitleEl.textContent = [item.episodeCode, item.title].filter(Boolean).join(' · ');
+      } else {
+        titleEl.textContent = item.title;
+        subtitleEl.textContent = dateStr;
+      }
+      overviewEl.textContent = item.overview || '';
+      overviewEl.hidden = !item.overview;
+      pathEl.textContent = item.path || '';
+      pathEl.hidden = !item.path;
+    } else {
+      titleEl.textContent = item.title;
+      subtitleEl.textContent = item.addedAt
+        ? new Date(item.addedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : '';
+      overviewEl.hidden = true;
+      pathEl.hidden = true;
+    }
+
+    // Position near the tile, flipping to whichever side/edge keeps the
+    // whole popup on-screen - this window is a small corner HUD, not a full
+    // page, so there's rarely room to just open toward one fixed direction.
+    popup.style.visibility = 'hidden';
+    popup.classList.add('is-visible');
+    const tileRect = node.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const margin = 10;
+
+    let left = tileRect.right + margin;
+    if (left + popupRect.width > window.innerWidth - margin) {
+      left = tileRect.left - popupRect.width - margin;
+    }
+    left = Math.max(margin, Math.min(left, window.innerWidth - popupRect.width - margin));
+
+    let top = tileRect.top;
+    if (top + popupRect.height > window.innerHeight - margin) {
+      top = window.innerHeight - popupRect.height - margin;
+    }
+    top = Math.max(margin, top);
+
+    popup.style.left = `${Math.round(left)}px`;
+    popup.style.top = `${Math.round(top)}px`;
+    popup.style.visibility = '';
   }
 
   async fetchNowPlaying() {
