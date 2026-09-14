@@ -295,6 +295,14 @@ app.get('/api/downloads/active', async (req, res) => {
   res.json(await getDownloadsActive());
 });
 
+// Jellyfin 12.0.0 dropped the old X-Emby-Token header in favor of this
+// Authorization scheme - confirmed by hand against this server after every
+// API key started 401ing post-upgrade (2026-09-14). Kept as one helper so
+// there's a single place to update if the format changes again.
+function jellyfinAuthHeader(token) {
+  return { Authorization: `MediaBrowser Token="${token}"` };
+}
+
 // Recently added media - Jellyfin + Immich, normalized
 async function getMediaRecent() {
   const results = [];
@@ -304,7 +312,7 @@ async function getMediaRecent() {
     try {
       const r = await fetch(
         `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated`,
-        { headers: { 'X-Emby-Token': jellyfin.token } }
+        { headers: jellyfinAuthHeader(jellyfin.token) }
       );
       const data = await r.json();
       (data.Items || []).forEach(item => {
@@ -372,9 +380,9 @@ async function fetchThumbnailBuffer(source, id) {
   const { jellyfin, immich } = config.integrations || {};
   let upstream;
   if (source === 'jellyfin' && jellyfin) {
-    upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Primary?maxWidth=200`, { headers: { 'X-Emby-Token': jellyfin.token } });
+    upstream = await fetch(`${jellyfin.url}/Items/${id}/Images/Primary?maxWidth=200`, { headers: jellyfinAuthHeader(jellyfin.token) });
   } else if (source === 'jellyfin-user' && jellyfin) {
-    upstream = await fetch(`${jellyfin.url}/Users/${id}/Images/Primary?maxWidth=100`, { headers: { 'X-Emby-Token': jellyfin.token } });
+    upstream = await fetch(`${jellyfin.url}/Users/${id}/Images/Primary?maxWidth=100`, { headers: jellyfinAuthHeader(jellyfin.token) });
   } else if (source === 'immich' && immich) {
     upstream = await fetch(`${immich.url}/api/assets/${id}/thumbnail`, { headers: { 'x-api-key': immich.api_key } });
   } else {
@@ -426,7 +434,7 @@ app.get('/api/media/plex-image', async (req, res) => {
 // resolution, bitrate, why a transcode is happening).
 async function fetchJellyfinNowPlaying(jellyfin) {
   try {
-    const r = await fetch(`${jellyfin.url}/Sessions`, { headers: { 'X-Emby-Token': jellyfin.token } });
+    const r = await fetch(`${jellyfin.url}/Sessions`, { headers: jellyfinAuthHeader(jellyfin.token) });
     const sessions = await r.json();
     return (sessions || []).filter(s => s.NowPlayingItem).map(s => {
       const item = s.NowPlayingItem;
