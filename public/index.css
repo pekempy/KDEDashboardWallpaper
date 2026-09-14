@@ -371,7 +371,10 @@ body {
 
 /* Hover peek popup - fanart + details for a Recently Added tile. Not a
    modal: no overlay/close button, purely hover-driven (see
-   scheduleRecentHoverPopup/hideRecentHoverPopup in app.js). */
+   scheduleRecentHoverPopup/hideRecentHoverPopup in app.js). Darker and more
+   opaque than the standard .glass-card, and with a brighter border, since
+   this floats freestanding over the wallpaper rather than docked in the
+   widget column - it needs to read as its own surface at a glance. */
 .recent-hover-popup {
   position: fixed;
   z-index: 500;
@@ -382,6 +385,9 @@ body {
   transform: translateY(4px);
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
+  background: rgba(8, 7, 7, 0.97);
+  border: 1px solid var(--border-hover);
+  box-shadow: var(--panel-shadow), 0 0 0 1px rgba(0,0,0,0.5);
 }
 .recent-hover-popup.is-visible { opacity: 1; transform: none; }
 .recent-hover-image {
@@ -400,17 +406,35 @@ body {
   font-size: 11.5px; color: var(--text-muted); margin-top: 3px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+.recent-hover-section { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--border); }
+.recent-hover-section[hidden] { display: none; }
+.recent-hover-section-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--accent-color); margin-bottom: 7px;
+}
+.recent-hover-section-label i { width: 11px; height: 11px; }
 .recent-hover-overview {
-  font-size: 11px; line-height: 1.45; color: var(--text-muted); margin-top: 8px;
+  font-size: 11px; line-height: 1.45; color: var(--text-muted);
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
 }
 .recent-hover-path {
   font-size: 9.5px; font-family: var(--font-mono); color: var(--text-dim);
-  margin-top: 8px; word-break: break-all;
+  word-break: break-all;
 }
-/* Both set their own `display`, which otherwise beats the UA [hidden] rule -
-   toggling .hidden in JS would silently do nothing without this. */
-.recent-hover-overview[hidden], .recent-hover-path[hidden] { display: none; }
+
+.recent-hover-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.recent-hover-stat {
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 6px 9px; min-width: 0;
+}
+.recent-hover-stat-wide { grid-column: 1 / -1; }
+.recent-hover-stat-label { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.recent-hover-stat-value {
+  font-size: 11px; font-family: var(--font-mono); color: var(--text-main); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* Now Playing - Jellyfin + Plex sessions, consolidated. Poster with a
    circular avatar badge in the corner echoes the header's own

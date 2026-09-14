@@ -439,13 +439,29 @@ class DashboardApp {
     document.getElementById('recent-hover-popup').classList.remove('is-visible');
   }
 
+  // { label, value } chips for the "Media"/"Camera" section grid - `wide`
+  // makes a chip span both columns, for values too long to sit side-by-side.
+  buildRecentHoverStats(stats) {
+    return stats.filter(s => s.value).map(s => `
+      <div class="recent-hover-stat${s.wide ? ' recent-hover-stat-wide' : ''}">
+        <div class="recent-hover-stat-label">${s.label}</div>
+        <div class="recent-hover-stat-value">${s.value}</div>
+      </div>
+    `).join('');
+  }
+
   showRecentHoverPopup(item, node) {
     const popup = document.getElementById('recent-hover-popup');
     const img = document.getElementById('recent-hover-image');
     const titleEl = document.getElementById('recent-hover-title');
     const subtitleEl = document.getElementById('recent-hover-subtitle');
+    const overviewSection = document.getElementById('recent-hover-overview-section');
     const overviewEl = document.getElementById('recent-hover-overview');
+    const pathSection = document.getElementById('recent-hover-path-section');
     const pathEl = document.getElementById('recent-hover-path');
+    const techSection = document.getElementById('recent-hover-tech-section');
+    const techLabel = document.getElementById('recent-hover-tech-label');
+    const techGrid = document.getElementById('recent-hover-tech-grid');
 
     const isJellyfin = item.source === 'jellyfin';
     img.src = (isJellyfin ? (item.backdropUrl || item.thumbUrl) : (item.previewUrl || item.thumbUrl));
@@ -463,17 +479,39 @@ class DashboardApp {
         subtitleEl.textContent = dateStr;
       }
       overviewEl.textContent = item.overview || '';
-      overviewEl.hidden = !item.overview;
+      overviewSection.hidden = !item.overview;
       pathEl.textContent = item.path || '';
-      pathEl.hidden = !item.path;
+      pathSection.hidden = !item.path;
+
+      techLabel.innerHTML = '<i data-lucide="film"></i> Media';
+      const stats = this.buildRecentHoverStats([
+        { label: 'Resolution', value: item.resolution },
+        { label: 'Video', value: item.videoCodec },
+        { label: 'Audio', value: item.audioCodec },
+      ]);
+      techGrid.innerHTML = stats;
+      techSection.hidden = !stats;
     } else {
       titleEl.textContent = item.title;
       subtitleEl.textContent = item.addedAt
         ? new Date(item.addedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
         : '';
-      overviewEl.hidden = true;
-      pathEl.hidden = true;
+      overviewSection.hidden = true;
+      pathSection.hidden = true;
+
+      techLabel.innerHTML = '<i data-lucide="camera"></i> Camera';
+      const stats = this.buildRecentHoverStats([
+        { label: 'Camera', value: item.camera, wide: true },
+        { label: 'Lens', value: item.lens, wide: true },
+        { label: 'Aperture', value: item.aperture },
+        { label: 'Shutter', value: item.shutterSpeed },
+        { label: 'ISO', value: item.iso },
+        { label: 'Focal Length', value: item.focalLength },
+      ]);
+      techGrid.innerHTML = stats;
+      techSection.hidden = !stats;
     }
+    lucide.createIcons();
 
     // Position near the tile, flipping to whichever side/edge keeps the
     // whole popup on-screen - this window is a small corner HUD, not a full

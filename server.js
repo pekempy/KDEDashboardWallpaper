@@ -311,7 +311,7 @@ async function getMediaRecent() {
   if (jellyfin) {
     try {
       const r = await fetch(
-        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated,Overview,ProductionYear,PremiereDate,Path`,
+        `${jellyfin.url}/Items?SortBy=DateCreated&SortOrder=Descending&Limit=9&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=DateCreated,Overview,ProductionYear,PremiereDate,Path,MediaStreams`,
         { headers: jellyfinAuthHeader(jellyfin.token) }
       );
       const data = await r.json();
@@ -326,6 +326,8 @@ async function getMediaRecent() {
         // logic as the poster above.
         const backdropId = item.BackdropImageTags?.length ? item.Id
           : (item.Type === 'Episode' && item.ParentBackdropItemId) ? item.ParentBackdropItemId : null;
+        const videoStream = item.MediaStreams?.find(m => m.Type === 'Video');
+        const audioStream = item.MediaStreams?.find(m => m.Type === 'Audio');
         results.push({
           source: 'jellyfin',
           id: item.Id,
@@ -338,6 +340,9 @@ async function getMediaRecent() {
           year: item.ProductionYear || null,
           releaseDate: item.PremiereDate || null,
           path: item.Path || null,
+          resolution: videoStream ? `${videoStream.Width}x${videoStream.Height}` : null,
+          videoCodec: videoStream?.Codec ? videoStream.Codec.toUpperCase() : null,
+          audioCodec: audioStream?.Codec ? audioStream.Codec.toUpperCase() : null,
           thumbUrl: `/api/media/thumb/jellyfin/${imageId}`,
           backdropUrl: backdropId ? `/api/media/thumb/jellyfin-backdrop/${backdropId}` : null,
           linkUrl: `${jellyfin.public_url || jellyfin.url}/web/index.html#/details?id=${item.Id}&serverId=${item.ServerId}`,
@@ -357,12 +362,32 @@ async function getMediaRecent() {
         body: JSON.stringify({ size: 9 }),
       });
       const data = await r.json();
-      (data.assets?.items || []).forEach(asset => {
+      const assets = data.assets?.items || [];
+      // The search endpoint doesn't carry EXIF - one extra fetch per asset
+      // (at most 9, once a minute) to get camera/lens/exposure for the
+      // hover popup.
+      const exifByAssetId = new Map(await Promise.all(assets.map(async (asset) => {
+        try {
+          const detailRes = await fetch(`${immich.url}/api/assets/${asset.id}`, { headers: { 'x-api-key': immich.api_key } });
+          const detail = await detailRes.json();
+          return [asset.id, detail.exifInfo || null];
+        } catch {
+          return [asset.id, null];
+        }
+      })));
+      assets.forEach(asset => {
+        const exif = exifByAssetId.get(asset.id);
         results.push({
           source: 'immich',
           id: asset.id,
           title: asset.originalFileName,
           type: asset.type === 'VIDEO' ? 'Video' : 'Photo',
+          camera: exif?.make || exif?.model ? [exif.make, exif.model].filter(Boolean).join(' ') : null,
+          lens: exif?.lensModel || null,
+          aperture: exif?.fNumber ? `ƒ/${exif.fNumber}` : null,
+          shutterSpeed: exif?.exposureTime ? `${exif.exposureTime} s` : null,
+          iso: exif?.iso ? `ISO ${exif.iso}` : null,
+          focalLength: exif?.focalLength ? `${exif.focalLength} mm` : null,
           thumbUrl: `/api/media/thumb/immich/${asset.id}`,
           previewUrl: `/api/media/thumb/immich-preview/${asset.id}`,
           linkUrl: `${immich.public_url || immich.url}/photos/${asset.id}`,
