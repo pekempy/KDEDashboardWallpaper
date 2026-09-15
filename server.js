@@ -29,6 +29,16 @@ const CONFIG_PATH = path.join(__dirname, 'config.yaml');
 
 let config = null;
 
+// Display-name overrides for Now Playing (Jellyfin/Plex username -> shown
+// name), applied at the source so both the internal widget and the public
+// API (which reuses this same nowPlaying data) get the renamed value.
+const DISPLAY_NAME_OVERRIDES = {
+  'Daniel Parks': "Dan's Dad",
+};
+function displayName(name) {
+  return DISPLAY_NAME_OVERRIDES[name] || name;
+}
+
 function saveConfig() {
   fs.writeFileSync(CONFIG_PATH, yaml.dump(config), 'utf8');
 }
@@ -519,7 +529,7 @@ async function fetchJellyfinNowPlaying(jellyfin) {
       return {
         source: 'jellyfin',
         sessionId: s.Id,
-        user: { name: s.UserName || 'Unknown', avatarUrl: s.UserId ? `/api/media/thumb/jellyfin-user/${s.UserId}` : null },
+        user: { name: displayName(s.UserName || 'Unknown'), avatarUrl: s.UserId ? `/api/media/thumb/jellyfin-user/${s.UserId}` : null },
         title: item.Name,
         subtitle,
         type: item.Type,
@@ -586,7 +596,7 @@ async function fetchPlexNowPlaying(plex) {
       return {
         source: 'plex',
         sessionId: item.sessionKey,
-        user: { name: item.User?.title || 'Unknown', avatarUrl: item.User?.thumb || null },
+        user: { name: displayName(item.User?.title || 'Unknown'), avatarUrl: item.User?.thumb || null },
         title: item.title,
         subtitle,
         type: item.type,

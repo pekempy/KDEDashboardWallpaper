@@ -3,6 +3,28 @@
   src: url('assets/fonts/Monolithic.ttf') format('truetype');
   font-display: swap;
 }
+/* Bebas Neue - per community font-identification research (see
+   Expedition33Assets/fonts/README.md), this is the game's actual UI-numbers
+   typeface. Swapped in for --font-numeric over Monolithic (an undocumented
+   placeholder pick): condensed, high-contrast digits read faster at a
+   glance than Monolithic's hand-painted strokes, which matters for stats
+   you're checking quickly, not reading. */
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('assets/fonts/BebasNeue-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+/* Fan-made recreation of the game's actual logotype face (not one of the
+   vetted-license Google Fonts in Expedition33Assets/fonts/README.md - fine
+   for this personal, non-distributed use, but worth knowing if this project
+   is ever shared). No colon/comma glyphs, so the clock/date font-family
+   stacks fall back to Bebas Neue/font-main for punctuation - normal
+   per-character font fallback, not a bug. */
+@font-face {
+  font-family: 'EX33 Display';
+  src: url('assets/fonts/Ex33_by_AthemWulf.ttf') format('truetype');
+  font-display: swap;
+}
 
 :root {
   --font-main: 'Space Grotesk', sans-serif;
@@ -12,7 +34,7 @@
      and Playfair holds up at small uppercase sizes where Cormorant's
      delicate strokes wash out */
   --font-display: 'Playfair Display', serif;
-  --font-numeric: 'Monolithic', var(--font-mono);
+  --font-numeric: 'Bebas Neue', var(--font-mono);
 
   /* Lumina gold - a genuine accent now, not a wash. The real game's UI is
      near-monochrome (black/grey/cream) with gold kept for specific accent
@@ -97,9 +119,12 @@ body {
 .glass-header {
   background:
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 30%),
+    url('assets/e33/textures/deco-lattice.png') repeat,
     var(--panel-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  /* No backdrop-filter: the panel bg is ~94% opaque so the blur was barely
+     visible, but any repaint inside a backdrop-filtered element (the pulsing
+     status dot, the 1s clock tick) forces a full-width gaussian re-blur every
+     frame - that alone pinned the wallpaper Chrome GPU process at ~4 cores. */
   border: 1px solid var(--border);
   box-shadow: var(--panel-shadow);
   border-radius: var(--radius-lg);
@@ -121,6 +146,7 @@ body {
 .glass-card {
   background:
     linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 25%),
+    url('assets/e33/textures/deco-lattice.png') repeat,
     var(--panel-bg-flat);
   border: 1px solid var(--border);
   box-shadow: var(--panel-shadow);
@@ -176,32 +202,132 @@ body {
   border-radius: 999px; color: var(--success);
 }
 .dot { width: 6px; height: 6px; background: var(--success); transform: rotate(45deg); }
-.dot.pulse { animation: pulse 2s infinite; }
+/* Ring pulse on a pseudo-element that animates transform + opacity only, so it
+   runs on the compositor and never triggers a repaint (the old box-shadow
+   animation repainted 60fps forever). */
+.dot.pulse { position: relative; }
+.dot.pulse::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid rgba(143, 174, 110, 0.5);
+  animation: pulse 2s ease-out infinite;
+  will-change: transform, opacity;
+}
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(143, 174, 110, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(143, 174, 110, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(143, 174, 110, 0); }
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  70%  { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
-.clock-display { font-family: var(--font-numeric); font-size: 21px; font-weight: 400; line-height: 1.2; letter-spacing: 0.02em; }
-.date-display { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.clock-display {
+  font-family: 'EX33 Display', var(--font-numeric); font-size: 30px; font-weight: 400;
+  line-height: 1.25; letter-spacing: 0.03em; color: var(--text-main);
+  text-shadow: 0 0 12px var(--accent-transparent);
+}
+/* The asterisk glyph in this font is the same bold X/diamond shard mark as
+   the favicon. One at 0.55em still read as a competing shape rather than a
+   separator - two stacked at half that size instead, echoing a colon's own
+   two-dots layout instead of trying to pass a single mark off as one.
+   White (not the gold accent) so it reads as a neutral punctuation mark,
+   not a third accent competing with the digits for attention. */
+.clock-sep {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05em;
+  padding: 0 3px;
+  vertical-align: middle;
+}
+.clock-sep span {
+  font-size: 0.21em;
+  line-height: 1;
+  color: #fff;
+}
+.date-display {
+  font-family: 'EX33 Display', var(--font-main); font-size: 17px; color: var(--text-main);
+  margin-top: 4px; letter-spacing: 0.02em; opacity: 0.85;
+}
+/* Bebas Neue instead of the surrounding EX33 Display - its thin digit
+   strokes made the day number read fainter than the weekday/month text
+   next to it, the same weight mismatch the clock separator had. */
+.date-day { font-family: 'Bebas Neue', var(--font-numeric); letter-spacing: 0.02em; }
 .header-right > div:nth-child(1) { text-align: right; }
 
 /* Search */
-.search-wrap { position: relative; width: 100%; max-width: 480px; }
+.search-wrap { position: relative; width: 100%; max-width: 480px; background: none; }
+/* Same button skin as Terminal/Update and the Bookmarks/Folders link cards,
+   but hand-cropped into fixed caps + stretched edges rather than one
+   100%/100% stretch of the whole source - this box is much wider relative
+   to its height than a normal button, so squashing the full image into
+   that aspect ratio flattened the pointed ends down to almost nothing.
+   Fixed-width caps keep the point shape at its real proportions regardless
+   of how wide the box is; only the plain top/bottom trim (cropped away
+   from the point) stretches, since it has no shape to distort. */
 .search-box {
   display: flex; align-items: center;
-  background: rgba(0,0,0,0.35);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 8px 12px; gap: 9px;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+  position: relative;
+  z-index: 0;
+  border-radius: 2px;
+  padding: 8px 18px 8px 74px; gap: 9px;
   transition: var(--transition);
 }
-.search-box:focus-within {
-  border-color: var(--accent-color);
-  background: rgba(10,7,4,0.72);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4), 0 0 0 3px var(--accent-transparent), 0 0 20px -6px var(--accent-dim);
+/* Left/right caps are independently sized (not a mirrored pair) - the left
+   one carries more visual weight since that's where the search icon sits
+   and where attention naturally lands first reading left-to-right.
+   Re-measured against the source's actual alpha channel this time (the
+   previous crop cut the taper off before it ever reached flat ground, so
+   the "safe" zone the icon was supposed to sit in was still sloped border
+   line - that's the "icon cut off" bug). The taper genuinely resolves to
+   parallel lines at x=598 of 3800 on the left, x=316 from the right;
+   crops now run to 850/450 respectively to include a real flat buffer past
+   that point, not just up to it. Edge width accounts for both cap widths
+   (100% - 95px - 55px) so it actually reaches the right cap instead of
+   stopping short - but "top center"/"bottom center" positioning centers
+   using EQUAL margins on both sides (75px/75px), which doesn't match the
+   asymmetric 95px/55px caps at all: the edge line was drifting 20px short
+   of the right cap (and 20px past the left one, overlapping it) because
+   "center" had no idea the two caps were different widths. Explicit
+   "95px top"/"95px bottom" offsets instead - starts exactly where the left
+   cap ends, and the width calc takes it exactly to where the right cap
+   begins, regardless of how the two cap widths compare. */
+.search-box::before {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: -1;
+  background-image:
+    url('assets/e33/buttons/search-cap-left.png'),
+    url('assets/e33/buttons/search-cap-right.png'),
+    url('assets/e33/buttons/search-edge-top.png'),
+    url('assets/e33/buttons/search-edge-bottom.png'),
+    linear-gradient(#1B1919, #1B1919);
+  background-position: left center, right center, 95px top, 95px bottom, 95px top;
+  background-size:
+    95px 100%, 55px 100%,
+    calc(100% - 150px) 6px, calc(100% - 150px) 6px,
+    calc(100% - 150px) 100%;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  pointer-events: none;
+}
+/* Focus glow as its own layer (not stacked into ::before with the caps) so
+   it gets independent opacity control and can be inset away from the caps
+   - constrained to roughly the input's own span (95px/55px match the cap
+   widths above) instead of washing across the whole box including the
+   pointed ends. */
+.search-box::after {
+  content: '';
+  position: absolute;
+  left: 95px; right: 55px; top: 0; bottom: 0;
+  z-index: -1;
+  background: url('assets/e33/buttons/button-hover-stain.png') center / 100% 100% no-repeat;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.search-box:focus-within::after {
+  opacity: 0.3;
 }
 .search-box i, .search-box svg { width: 15px; height: 15px; color: var(--text-muted); flex-shrink: 0; }
 .search-box input {
@@ -260,14 +386,260 @@ body {
 .widget-column::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .widget { border-radius: var(--radius-lg); padding: 16px; }
+
+/* border-image on this asset never worked at any widget height: stretch
+   warped the lattice, repeat stamped the whole ornate corner shape down the
+   edge like a stack of panels ("horribly tiled" - correct, that's exactly
+   what border-image-repeat does, it repeats the WHOLE corner slice, pattern
+   included). Same fix as Bookmarks: hand-cropped pieces instead. The
+   difference here is this asset's corner art (chevron point + lattice) is
+   too busy to safely stretch across an arbitrary height the way Bookmarks'
+   plain pinstripe edge could - so these are genuine fixed-size CORNERS
+   (never stretched, only ever positioned) generated from one crop via
+   flips, with the gap between them left to the ordinary shared background.
+   Thin plain-trim strips still connect them along the top/bottom, same
+   "cropped from the flat middle, stretches only in width" idea as
+   Bookmarks' edges. */
+/* Left/right edges: previously nothing sat between the top and bottom
+   corners, so a tall (multi-session) Now Playing just fell back to plain
+   lattice down the sides. Filled that with a plain pinstripe line (cropped
+   from panel-recent.png's own edge, well away from its corners) - unlike
+   the corner art, a single uniform line has no pattern to warp, so it's
+   safe to stretch to height:100% directly rather than needing repeat-y or
+   any of the workarounds the corner pieces required. */
+/* Corners dropped entirely - even at reduced opacity, the lattice motif
+   itself (not the opacity) was the problem, so no amount of fading it
+   further was going to fix that. Just the four plain lines now, same idea
+   as Bookmarks/Vitals: nothing here has a repeating pattern to warp, so
+   every edge can size to 100% safely regardless of the widget's actual
+   width/height. */
+#widget-nowplaying {
+  background-image:
+    url('assets/e33/textures/nowplaying-edge-top.png'),
+    url('assets/e33/textures/nowplaying-edge-bottom.png'),
+    url('assets/e33/textures/nowplaying-edge-side.png'),
+    url('assets/e33/textures/nowplaying-edge-side.png'),
+    url('assets/e33/textures/deco-lattice.png');
+  background-position: top center, bottom center, left center, right center, top left;
+  background-size:
+    100% 8px, 100% 8px,
+    5px 100%, 5px 100%,
+    auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+}
+/* Vitals: same clean thin-pinstripe asset as Recently Added
+   (WeaponTooltipBackground) - a plain inset line with a small corner notch,
+   not a big geometric shape, so it holds up fine at any height whether
+   stretched or repeated, unlike panel-frame.png above. */
+#widget-vitals {
+  border-style: solid;
+  border-color: transparent;
+  border-width: 6px 16px;
+  border-image-source: url('assets/e33/textures/panel-recent.png');
+  border-image-slice: 40;
+  border-image-width: 6px 16px;
+  border-image-repeat: stretch repeat;
+}
+/* Tried a bigger lattice tile, then a stretched paint-smudge, for a richer
+   Vitals-only background - the tile read as ambiguous diagonal scratches at
+   this width, and the smudge stretched into a tall narrow panel just looked
+   like an odd blob shape. Reverted to the same shared deco-lattice.png
+   every other widget uses (no override needed - .glass-card's default
+   background already applies). If Vitals needs to stand out, that should
+   come from the frame/outline, not a bespoke background asset - that
+   avenue hasn't produced a result worth keeping after three attempts. */
+
+/* Second pass: the remaining five widgets, each framed from a different
+   game panel asset - varied on purpose, same as the per-widget dividers.
+   All use "stretch repeat" (learned from Now Playing above): thin top/
+   bottom edges stretch invisibly, tall/variable-height left/right edges
+   tile instead of warping. Slice values are eyeballed proportions per
+   asset, not measured pixel-exact - flag any that read wrong and I'll
+   adjust the specific widget's numbers. */
+/* No "fill" keyword on any of these five (unlike Vitals/Now Playing above) -
+   fill also renders the slice's own center region, stretched, as a
+   background layer, and these five source images all have real pattern
+   still present past the slice line (unlike panel-frame.png, whose center
+   is genuinely plain). With fill, that leftover pattern was washing across
+   the widget's actual content instead of staying confined to the border.
+   Leaving it off keeps the center hollow, so only our own background/
+   lattice shows through - same idea as Vitals, just correct this time. */
+/* Pilot: hand-cropped pieces instead of border-image. border-image kept
+   fighting us on this asset (stretch warped it, repeat stamped the corner
+   shape down the height, fill washed pattern across the content), because
+   its one slice-and-repeat model can't treat "plain pinstripe edge" and
+   "ornate corner" differently - every rule (stretch/repeat/fill) applies
+   uniformly to whatever's in that slice. Cropping the pieces by hand and
+   compositing them as separate background layers gives each one exactly
+   the sizing rule it actually needs: the top/bottom pinstripes are cropped
+   from the source's plain middle section (no corner content to warp) and
+   stretch only in width, sized in fixed px for height, so they stay thin
+   regardless of the widget's actual width. The right-side chevron cap is a
+   simple line shape (not a busy repeating pattern), so stretching it to
+   100% height looks fine at any widget height - genuinely adaptive, not
+   fighting a slice-mode mismatch. This source asset's left edge is plain
+   in the original art (no corner ornament there), so there's no left cap
+   to crop - not an omission. background-image is a full replacement list
+   here (need it and the inherited gradient+lattice together, since setting
+   this longhand doesn't merge with .glass-card's shorthand, it overrides
+   it), background-color still comes from .glass-card's shorthand
+   untouched. */
+#widget-bookmarks {
+  background-image:
+    url('assets/e33/textures/bookmarks-edge-top.png'),
+    url('assets/e33/textures/bookmarks-edge-bottom.png'),
+    url('assets/e33/textures/bookmarks-cap-right.png'),
+    linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 25%),
+    url('assets/e33/textures/deco-lattice.png');
+  background-position: top left, bottom left, top right, top left, top left;
+  background-size:
+    calc(100% - 18px) 6px,
+    calc(100% - 18px) 6px,
+    18px 100%,
+    auto, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+}
+/* Same hand-cropped approach as Bookmarks/Now Playing. This source's
+   interesting content (lattice pattern) is only on the left - the right
+   side is genuinely plain in the original art - so only left corners exist
+   here, same "don't fabricate a feature the source doesn't have" call as
+   Bookmarks' missing left cap. Top edge is cropped from a plain stretch of
+   the source (x=900-3700, away from the lattice) so stretching it
+   horizontally has no pattern to warp. */
+#widget-folders {
+  background-image:
+    url('assets/e33/textures/folders-corner-tl.png'),
+    url('assets/e33/textures/folders-corner-bl.png'),
+    url('assets/e33/textures/folders-edge-top.png'),
+    linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 25%),
+    url('assets/e33/textures/deco-lattice.png');
+  background-position: top left, bottom left, 90px top, top left, top left;
+  background-size:
+    90px 90px, 90px 90px,
+    calc(100% - 90px) 6px,
+    auto, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+}
+#widget-downloads {
+  border-style: solid; border-color: transparent; border-width: 5px 14px;
+  border-image-source: url('assets/e33/textures/panel-downloads.png');
+  border-image-slice: 20 150;
+  border-image-width: 5px 14px;
+  border-image-repeat: stretch repeat;
+}
+/* SkillPointsBackground only has art in its four corners (open L-bracket
+   accents, no connecting line along the edges) - a distinctive tactical-HUD
+   "corner bracket" look rather than a full frame, so a small symmetric
+   slice is deliberate here, not a simplification. */
+#widget-health {
+  border-style: solid; border-color: transparent; border-width: 8px;
+  border-image-source: url('assets/e33/textures/panel-health.png');
+  border-image-slice: 100;
+  border-image-width: 8px;
+  border-image-repeat: stretch;
+}
+#widget-recent {
+  border-style: solid; border-color: transparent; border-width: 5px 12px;
+  border-image-source: url('assets/e33/textures/panel-recent.png');
+  border-image-slice: 40;
+  border-image-width: 5px 12px;
+  border-image-repeat: stretch repeat;
+}
+
+/* Health Bar outline from the game's own HUD, framing the CPU/RAM progress
+   tracks - hollow center (transparent between its two pinstripe lines) so
+   the accent-colored fill underneath still reads through.
+   The source asset's own end-caps turned out genuinely asymmetric (a small
+   loop on the left, a much bigger arrow on the right - built for a full-
+   width HUD bar), so no amount of offset tuning was ever going to make both
+   sides look even. Cropped them off entirely (health-bar-outline.png is now
+   just the plain double-line shaft) and kept only that - uniform and
+   symmetric by construction.
+   Attached directly to .progress-track itself at width/height:100%, not
+   hand-calculated pixel offsets on the parent row - it now genuinely tracks
+   whatever width the bar actually renders at instead of assuming label/
+   value column widths that could drift out of sync with this rule. Putting
+   it back on .progress-track only works because there are no more caps
+   needing to bleed past its overflow:hidden - the whole point of moving it
+   off in the first place. */
+/* height:100% (matching the track's own 5px) made the outline's two lines
+   scale down to sub-pixel and anti-alias into near-invisibility - a real
+   double-line pattern needs more like 9-10px of vertical room to actually
+   read as two lines. Width stays 100% (that part genuinely was the fix -
+   it tracks the real bar width with nothing hand-calculated to drift out
+   of sync); height is a small fixed value, vertically centered, since
+   "100%" isn't a viable option at this track's height. */
+/* .vital-item covers both CPU/RAM (inside .vitals-grid) and every disk/mount
+   row (rendered as .vital-item.disk-row into #disk-vitals) - same track
+   markup either way, so the same outline now frames all of them, not just
+   the top two. */
+.vital-item .progress-track::after {
+  content: '';
+  position: absolute;
+  left: 0; width: 100%; top: 50%; transform: translateY(-50%);
+  height: 9px;
+  background: url('assets/e33/textures/health-bar-outline.png') center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+/* Corner watermarks - official item-art icons (book/vinyl/inventory), each a
+   thematic match for its widget. Full-color painted art at 28px would clash
+   with the thin gold-line SVG icons in the headers, so instead they run
+   oversized and near-invisible (4-6% opacity), bleeding off the corner
+   behind the content - flavor, not a functional icon. z-index: -1 relies on
+   .glass-card's own position:relative to keep it behind the widget's normal-
+   flow children without needing z-index on everything else in the card. */
+/* z-index: 0 (not just position:relative, which .glass-card already sets)
+   is required here - it makes each widget its own stacking context, so the
+   ::before's z-index: -1 stays scoped behind THIS widget's content. Without
+   it, -1 escapes to the nearest ancestor that actually establishes a
+   stacking context (likely several levels up), which is what made the
+   watermarks invisible - they were painting behind the whole column, not
+   just behind their own widget's header/list. */
+#widget-bookmarks, #widget-folders, #widget-nowplaying, #widget-recent, #widget-downloads { overflow: hidden; z-index: 0; }
+#widget-bookmarks::before, #widget-folders::before, #widget-nowplaying::before,
+#widget-recent::before, #widget-downloads::before {
+  content: '';
+  position: absolute;
+  bottom: -34px; right: -34px;
+  width: 150px; height: 150px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: bottom right;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: -1;
+}
+#widget-bookmarks::before { background-image: url('assets/e33/icons/book.png'); }
+#widget-folders::before { background-image: url('assets/e33/icons/inventory.png'); }
+#widget-nowplaying::before { background-image: url('assets/e33/icons/music-record.png'); }
+#widget-recent::before { background-image: url('assets/e33/icons/journal.png'); }
+/* Loot emblem is a thin outline, not painted item-art like the others above -
+   reads fine at the same low opacity but needed a bit less crop room since
+   it's already a tight, centered shape rather than a loosely-framed object. */
+#widget-downloads::before { background-image: url('assets/e33/icons/loot-emblem.png'); width: 120px; height: 120px; bottom: -24px; right: -24px; }
 .widget-header {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 13px; padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-  /* (dropped the added top rule + padding - the double-hairline banner look
-     wasn't worth the extra height it added to every widget, three of which
-     stacked up pushed Folders off the bottom of the viewport) */
+  /* Loot-panel Art Deco divider line (gold-tinted from the source
+     black/white art) instead of a flat border-bottom - same spot, more
+     character. (dropped the added top rule + padding - the double-hairline
+     banner look wasn't worth the extra height it added to every widget,
+     three of which stacked up pushed Folders off the bottom of the
+     viewport.) */
+  background: url('assets/e33/textures/header-divider.png') bottom center / 80% 8px no-repeat;
 }
+/* Per-section divider art - a different piece of the game's own decoration
+   set per widget instead of one line repeated everywhere. Each source image
+   has its own native aspect ratio, so height is tuned by eye per asset
+   rather than reused, to keep every one reading as a thin line and not a
+   stretched or squashed version of its native shape. */
+#widget-bookmarks .widget-header { background-image: url('assets/e33/textures/divider-bookmarks.png'); background-size: 72% 10px; }
+#widget-folders .widget-header { background-image: url('assets/e33/textures/divider-folders.png'); background-size: 50% 12px; }
+#widget-nowplaying .widget-header { background-image: url('assets/e33/textures/divider-nowplaying.png'); background-size: 65% 14px; }
+#widget-downloads .widget-header { background-image: url('assets/e33/textures/divider-downloads.png'); background-size: 85% 6px; }
+#widget-health .widget-header { background-image: url('assets/e33/textures/divider-health.png'); background-size: 80% 7px; }
+#widget-recent .widget-header { background-image: url('assets/e33/textures/divider-recent.png'); background-size: 75% 6px; }
 .widget-header h3 {
   font-family: var(--font-display);
   font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
@@ -281,10 +653,14 @@ body {
    on the next fetch tick. */
 .collapse-toggle svg { transition: transform 0.2s ease; }
 .widget.is-collapsed .collapse-toggle svg { transform: rotate(180deg); }
-.widget.is-collapsed .widget-header { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.widget.is-collapsed .widget-header { margin-bottom: 0; padding-bottom: 0; background: none; }
 .widget.is-collapsed > *:not(.widget-header) { display: none; }
 .widget-icon { width: 13px; height: 13px; object-fit: contain; filter: drop-shadow(0 0 2px rgba(0,0,0,0.5)); }
-.widget-icon-svg { width: 28px; height: 28px; color: var(--accent-color); flex-shrink: 0; }
+.widget-icon-svg {
+  width: 28px; height: 28px; color: var(--accent-color); flex-shrink: 0;
+  background: url('assets/e33/textures/icon-smudge.png') center / 180% no-repeat;
+  border-radius: 50%;
+}
 .header-btn-svg { width: 22px; height: 22px; }
 .uptime { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent-color); }
 
@@ -301,7 +677,7 @@ body {
 .mount-group {
   font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
 }
-.progress-track { flex: 1; height: 5px; background: rgba(178, 58, 58, 0.12); border-radius: 3px; overflow: hidden; }
+.progress-track { position: relative; flex: 1; height: 5px; background: rgba(178, 58, 58, 0.12); border-radius: 3px; overflow: hidden; }
 .progress-fill {
   height: 100%; background: linear-gradient(90deg, var(--accent-color), var(--accent-hover)); width: 0%;
   border-radius: 3px; transition: width 0.5s ease, background 0.3s ease; box-shadow: 0 0 8px 0 var(--accent-transparent);
@@ -375,6 +751,10 @@ body {
    opaque than the standard .glass-card, and with a brighter border, since
    this floats freestanding over the wallpaper rather than docked in the
    widget column - it needs to read as its own surface at a glance. */
+/* Expedition-themed to match the widgets: same lattice layer, plus a thin
+   gold top accent line (borrowed from .glass-header's own hairline trick)
+   since a full corner/edge frame would be overkill on a small floating
+   tooltip that's only ever on screen for a few seconds. */
 .recent-hover-popup {
   position: fixed;
   z-index: 500;
@@ -385,9 +765,19 @@ body {
   transform: translateY(4px);
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
-  background: rgba(8, 7, 7, 0.97);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 30%),
+    url('assets/e33/textures/deco-lattice.png'),
+    rgba(8, 7, 7, 0.97);
   border: 1px solid var(--border-hover);
   box-shadow: var(--panel-shadow), 0 0 0 1px rgba(0,0,0,0.5);
+}
+.recent-hover-popup::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-color) 20%, var(--accent-color) 80%, transparent);
+  opacity: 0.6;
 }
 .recent-hover-popup.is-visible { opacity: 1; transform: none; }
 .recent-hover-image {
@@ -539,8 +929,24 @@ body {
 }
 .btn i, .btn svg { width: 12px; height: 12px; flex-shrink: 0; }
 .btn-sm { padding: 6px 10px; font-size: 11.5px; }
-.btn-ghost { background: rgba(255,255,255,0.03); color: var(--text-main); border-color: var(--border); }
-.btn-ghost:hover { background: rgba(255,255,255,0.07); border-color: var(--border-hover); }
+/* T_GenericButton.png is the game's actual button skin (a sketchy hand-drawn
+   hexagonal banner) - stretched to fill the box via background-size rather
+   than border-image, since its native 3800x616 canvas is built for
+   cinematic-scale UI and border-image's fixed-pixel corner slices would
+   need constant retuning at this HUD's ~30px button height. A flat stretch
+   survives the aspect distortion fine because the border art is sketchy,
+   not precise geometry. border-radius stays near-zero so the drawn
+   hexagon points aren't clipped by a rounded mask. */
+.btn-ghost {
+  background: url('assets/e33/buttons/button-base.png') center / 100% 100% no-repeat;
+  border-radius: 2px;
+  color: var(--text-main); border-color: transparent;
+}
+.btn-ghost:hover {
+  background:
+    url('assets/e33/buttons/button-hover-stain.png') center / 100% 100% no-repeat,
+    url('assets/e33/buttons/button-base.png') center / 100% 100% no-repeat;
+}
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-hover), var(--accent-color));
   color: #241a0a; font-weight: 600;
@@ -548,9 +954,9 @@ body {
 }
 .btn-primary:hover { background: var(--accent-hover); }
 
-.links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .link-item {
-  display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 8px;
+  display: flex; align-items: center; gap: 8px; padding: 9px 11px;
   background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
   border-left: 2px solid var(--accent-dim); /* the game's own item-pickup notification cards
                    ("New Weapon", "New Pictos") carry a colored left-edge accent stripe - same move here */
@@ -562,7 +968,23 @@ body {
 }
 .link-item:hover { background: var(--card-bg-hover); border-color: var(--border-hover); border-left-color: var(--accent-color); }
 .link-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-item img, .link-item i, .link-item svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--text-muted); }
+.link-item img, .link-item i, .link-item svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--accent-color); margin-left: 9px; }
+
+/* Same button skin as Terminal/Update (.btn-ghost) applied to the Bookmarks
+   and Folders link cards - the left accent stripe and flat fill are dropped
+   since the button art already carries its own drawn border, and doubling
+   up looked cluttered rather than richer. */
+#widget-bookmarks .link-item, #widget-folders .link-item {
+  background: url('assets/e33/buttons/button-base.png') center / 100% 100% no-repeat;
+  border: none;
+  border-left: none;
+  border-radius: 2px;
+}
+#widget-bookmarks .link-item:hover, #widget-folders .link-item:hover {
+  background:
+    url('assets/e33/buttons/button-hover-stain.png') center / 100% 100% no-repeat,
+    url('assets/e33/buttons/button-base.png') center / 100% 100% no-repeat;
+}
 
 /* Edit Mode Helpers */
 .edit-only { display: none; }

@@ -136,12 +136,22 @@ class DashboardApp {
   setupClock() {
     const updateTime = () => {
       const now = new Date();
-      document.getElementById('clock-display').innerText = now.toLocaleTimeString('en-US', {
-        hour12: false, hour: '2-digit', minute: '2-digit',
-      });
-      document.getElementById('date-display').innerText = now.toLocaleDateString('en-US', {
-        weekday: 'long', month: 'long', day: 'numeric',
-      });
+      // The clock font (EX33 Display) has no colon glyph - falls back to
+      // Bebas Neue for it, which reads as two mismatched fonts in one
+      // string. It does have an asterisk, though: the same X/diamond shard
+      // mark used for the favicon. Full-size it overpowers the digits, so
+      // it's wrapped in .clock-sep to scale it down to an accent instead.
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('clock-display').innerHTML = `${hh}<span class="clock-sep"><span>*</span><span>*</span></span>${mm}`;
+      // EX33 Display's digit strokes are thin/angular next to its bold
+      // letterforms (same imbalance the clock had), so "15" read noticeably
+      // fainter than "Tuesday, September" in the same string. Wrapping just
+      // the day number in Bebas Neue (already used for the vitals bars'
+      // bold digits) instead of leaving it in the surrounding font.
+      const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const month = now.toLocaleDateString('en-US', { month: 'long' });
+      document.getElementById('date-display').innerHTML = `${weekday}, ${month} <span class="date-day">${now.getDate()}</span>`;
     };
     updateTime();
     setInterval(updateTime, 1000);
@@ -439,6 +449,62 @@ class DashboardApp {
     document.getElementById('recent-hover-popup').classList.remove('is-visible');
   }
 
+  // Now Playing's hover popup - a lighter-weight peek than the click-through
+  // Stream Details modal (openStreamModal): just the fields worth knowing
+  // at a glance (transcode/direct, status, start/end, progress, and what's
+  // being transcoded if it is), reusing the same .stream-stat chip styling
+  // the modal already uses so the two stay visually consistent.
+  scheduleNowPlayingHoverPopup(item, node) {
+    clearTimeout(this.nowPlayingHoverTimer);
+    this.nowPlayingHoverTimer = setTimeout(() => this.showNowPlayingHoverPopup(item, node), 220);
+  }
+
+  hideNowPlayingHoverPopup() {
+    clearTimeout(this.nowPlayingHoverTimer);
+    document.getElementById('nowplaying-hover-popup').classList.remove('is-visible');
+  }
+
+  showNowPlayingHoverPopup(s, node) {
+    const popup = document.getElementById('nowplaying-hover-popup');
+    document.getElementById('np-hover-title').textContent = s.title;
+    document.getElementById('np-hover-subtitle').textContent = [s.subtitle, s.user.name].filter(Boolean).join(' · ');
+
+    const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+    const isPaused = s.state === 'paused';
+
+    document.getElementById('np-hover-progress-fill').style.width = `${s.progressPercent}%`;
+    document.getElementById('np-hover-started').textContent = s.startedAt ? `Started ${fmtTime(s.startedAt)}` : '';
+    document.getElementById('np-hover-percent').textContent = `${s.progressPercent}%`;
+    document.getElementById('np-hover-ends').textContent = isPaused ? 'Paused' : (s.endsAt ? `Ends ~${fmtTime(s.endsAt)}` : '');
+
+    const stats = [
+      ['Method', s.transcoding ? 'Transcoding' : 'Direct Play'],
+      ['Status', isPaused ? 'Paused' : 'Playing'],
+    ];
+    if (s.transcoding) {
+      const what = [s.details?.videoDecision, s.details?.audioDecision].filter(Boolean).join(' + ');
+      if (what) stats.push(['Transcoding', what, true]);
+    }
+
+    const escapeHtml = (str) => String(str).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    document.getElementById('np-hover-stats').innerHTML = stats.map(([label, value, wide]) => `
+      <div class="stream-stat${wide ? ' stream-stat-wide' : ''}">
+        <div class="stream-stat-label">${escapeHtml(label)}</div>
+        <div class="stream-stat-value">${escapeHtml(value)}</div>
+      </div>
+    `).join('');
+
+    const reasonBox = document.getElementById('np-hover-reason');
+    if (s.transcoding && s.details?.reasons?.length) {
+      document.getElementById('np-hover-reason-text').textContent = s.details.reasons.join(' · ');
+      reasonBox.hidden = false;
+    } else {
+      reasonBox.hidden = true;
+    }
+
+    this.positionHoverPopup(popup, node);
+  }
+
   // { label, value } chips for the "Media"/"Camera" section grid - `wide`
   // makes a chip span both columns, for values too long to sit side-by-side.
   buildRecentHoverStats(stats) {
@@ -514,10 +580,14 @@ class DashboardApp {
       techSection.hidden = !stats;
     }
     lucide.createIcons();
+    this.positionHoverPopup(popup, node);
+  }
 
-    // Position near the tile, flipping to whichever side/edge keeps the
-    // whole popup on-screen - this window is a small corner HUD, not a full
-    // page, so there's rarely room to just open toward one fixed direction.
+  // Shared by both hover popups (Recently Added, Now Playing) - positions
+  // near the trigger tile/row, flipping to whichever side/edge keeps the
+  // whole popup on-screen. This window is a small corner HUD, not a full
+  // page, so there's rarely room to just open toward one fixed direction.
+  positionHoverPopup(popup, node) {
     popup.style.visibility = 'hidden';
     popup.classList.add('is-visible');
     const tileRect = node.getBoundingClientRect();
@@ -558,7 +628,7 @@ class DashboardApp {
       widget.style.display = this.shouldShowWidget('now_playing') ? '' : 'none';
 
       el.innerHTML = items.map((s, idx) => `
-        <div class="nowplaying-item${s.transcoding ? ' is-transcode' : ''}" data-idx="${idx}" title="${s.title}${s.subtitle ? ' · ' + s.subtitle : ''}">
+        <div class="nowplaying-item${s.transcoding ? ' is-transcode' : ''}" data-idx="${idx}">
           <div class="np-poster-wrap">
             ${s.posterUrl ? `<img class="np-poster" src="${s.posterUrl}" alt="" loading="lazy">` : `<div class="np-poster np-poster-empty"></div>`}
             ${s.user.avatarUrl ? `<img class="np-avatar" src="${s.user.avatarUrl}" alt="">` : `<div class="np-avatar np-avatar-empty">${(s.user.name || '?').charAt(0).toUpperCase()}</div>`}
@@ -575,7 +645,10 @@ class DashboardApp {
       `).join('');
 
       el.querySelectorAll('.nowplaying-item').forEach(node => {
-        node.onclick = () => this.openStreamModal(items[+node.dataset.idx]);
+        const item = items[+node.dataset.idx];
+        node.onclick = () => this.openStreamModal(item);
+        node.onmouseenter = () => this.scheduleNowPlayingHoverPopup(item, node);
+        node.onmouseleave = () => this.hideNowPlayingHoverPopup();
       });
       lucide.createIcons();
       this.applyCollapseState('nowplaying', 'widget-nowplaying', 'nowplaying-count', items.length);

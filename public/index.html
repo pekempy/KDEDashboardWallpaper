@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GLaDOS Dashboard</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/e33/icons/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/e33/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/e33/icons/favicon-16.png">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -295,6 +298,32 @@
         <div class="recent-hover-section" id="recent-hover-path-section">
           <div class="recent-hover-section-label"><i data-lucide="folder"></i> File</div>
           <div class="recent-hover-path" id="recent-hover-path"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Now Playing hover popup - quick stream stats (transcode/direct,
+         status, start/end, progress) without needing the click-through
+         Stream Details modal. Same peek-panel idea as the Recently Added
+         hover popup: no overlay, no close button, shows/hides on hover. -->
+    <div class="recent-hover-popup glass-card" id="nowplaying-hover-popup">
+      <div class="recent-hover-body">
+        <div class="recent-hover-title" id="np-hover-title"></div>
+        <div class="recent-hover-subtitle" id="np-hover-subtitle"></div>
+        <div class="stream-modal-progress" style="margin-top: 12px; margin-bottom: 12px;">
+          <div class="progress-track"><div class="progress-fill" id="np-hover-progress-fill"></div></div>
+          <div class="stream-modal-progress-meta">
+            <span id="np-hover-started"></span>
+            <span id="np-hover-percent"></span>
+            <span id="np-hover-ends"></span>
+          </div>
+        </div>
+        <div class="stream-stat-grid" id="np-hover-stats"></div>
+        <div class="stream-reason-box" id="np-hover-reason" hidden style="margin-top: 10px; margin-bottom: 0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 21.5 20H2.5Z"/><path d="M12 9.5v5M12 17.5h.01"/>
+          </svg>
+          <span id="np-hover-reason-text"></span>
         </div>
       </div>
     </div>

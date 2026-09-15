@@ -25,6 +25,14 @@ pkill -f "dashboard-wallpaper" || true
 pkill -f "dashboard-wallpaper-profile" || true
 sleep 1
 
+# Chrome's HTTP disk cache for this profile lives under ~/.cache (separate
+# from the ~/.config profile dir), and persists across relaunches - this
+# script's whole job is "reload with fresh public/* content", so a stale
+# cache serving old CSS/images defeats it silently. Clear it every run.
+# Cookies/localStorage live in ~/.config instead, untouched.
+echo "Clearing wallpaper Chrome disk cache..."
+rm -rf "$HOME"/.cache/dashboard-wallpaper-profile-screen-*/Default 2>/dev/null || true
+
 # 4. Launch a dedicated Chrome window for each monitor defined in config
 echo "Launching wallpaper windows for each monitor..."
 
